@@ -1,0 +1,36 @@
+# Upstream repos -- reclone with scripts/setup_baselines.sh
+baselines/
+
+# Weights and cached latents
+checkpoints/
+*.ckpt
+*.safetensors
+*.pth
+
+# Experiment outputs; commit configs and the notes in docs/, not the artifacts
+experiments/*/
+!experiments/.gitkeep
+runs/
+wandb/
+outputs/
+*.npz
+fid_stats/
+
+# Data
+data/
+*.tar
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+build/
+dist/
+
+# Env
+.env
+.venv/
