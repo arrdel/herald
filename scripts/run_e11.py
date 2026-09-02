@@ -31,12 +31,11 @@ import subprocess
 import time
 from pathlib import Path
 
-import numpy as np
 import torch
-from torch.utils.data import DataLoader
 
 from herald.data.timeseries import build_bundle, load_etth1, synthetic_ar
-from herald.models.ts_mar import MARConfig, TimeSeriesMAR, random_masking
+from herald.eval import DRAFT_ARCH, TARGET_ARCH, measure_acceptance
+from herald.models.ts_mar import MARConfig, TimeSeriesMAR
 from herald.models.ts_tokenizer import TimeSeriesTokenizer, TokenizerConfig
 from herald.train.timeseries import (
     CachedTokenDataset,
@@ -48,82 +47,12 @@ from herald.train.timeseries import (
 )
 from herald.verifiers import analytic_acceptance_shared_covariance
 
-#: Target is the "expensive, accurate" model; draft is the cheap one. Held fixed across the sweep
-#: so the capacity gap -- the thing that generates disagreement -- does not drift with d.
-TARGET_ARCH = {"width": 256, "depth": 6, "n_heads": 8, "n_mixture": 8}
-DRAFT_ARCH = {"width": 128, "depth": 4, "n_heads": 4, "n_mixture": 4}
-
 
 def git_commit() -> str:
     try:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     except Exception:
         return "unknown"
-
-
-@torch.no_grad()
-def measure_acceptance(
-    draft: TimeSeriesMAR,
-    target: TimeSeriesMAR,
-    dataset,
-    device: str,
-    batch_size: int = 128,
-    max_batches: int = 40,
-    seed: int = 0,
-) -> dict:
-    """Exact acceptance, and the per-coordinate disagreement that should explain it.
-
-    Both models see the same tokens and the same mask, which is what the speculative setting
-    requires: any difference in their predictive distributions is then model disagreement rather
-    than a difference in what they were told.
-    """
-    draft.eval()
-    target.eval()
-    gen = torch.Generator(device=device).manual_seed(seed)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=True)
-
-    probs, gaps, sigma_gaps, log_ratios = [], [], [], []
-    for i, batch in enumerate(loader):
-        if i >= max_batches:
-            break
-        tokens = batch.to(device)
-        mask = random_masking(tokens.shape[0], tokens.shape[1], torch.device(device), generator=gen)
-        if not mask.any():
-            continue
-
-        q = draft.token_distribution(draft.forward_predictor(tokens, mask))
-        p = target.token_distribution(target.forward_predictor(tokens, mask))
-
-        x = q.sample()
-        log_ratio = (p.log_prob(x) - q.log_prob(x))[mask]
-        probs.append(torch.clamp(log_ratio.exp(), max=1.0).cpu())
-        log_ratios.append(log_ratio.cpu())
-
-        # delta: |mean_p - mean_q| per coordinate, in units of the draft's own scale.
-        d = tokens.shape[-1]
-        mean_gap = (p.mean - q.mean)[mask]
-        var_q = q.variance[mask].clamp_min(1e-12)
-        var_p = p.variance[mask].clamp_min(1e-12)
-        sigma = var_q.mean(-1).sqrt().clamp_min(1e-8)
-        gaps.append((mean_gap.norm(dim=-1) / (sigma * np.sqrt(d))).cpu())
-        # Scale disagreement, the other way two distributions diverge. The equal-covariance
-        # analytic curve is blind to it, so without this the measured-vs-analytic gap is unexplained.
-        sigma_gaps.append((0.5 * (var_p.log() - var_q.log())).abs().mean(-1).cpu())
-
-    probs = torch.cat(probs)
-    gaps = torch.cat(gaps)
-    sigma_gaps = torch.cat(sigma_gaps)
-    log_ratios = torch.cat(log_ratios)
-    return {
-        "acceptance": float(probs.mean()),
-        "acceptance_std": float(probs.std()),
-        "n_decisions": int(probs.numel()),
-        "delta_median": float(gaps.median()),
-        "delta_mean": float(gaps.mean()),
-        "log_sigma_gap_median": float(sigma_gaps.median()),
-        "log_ratio_median": float(log_ratios.median()),
-        "fraction_certain_accept": float((probs >= 0.999).float().mean()),
-    }
 
 
 def run_one_dim(d: int, bundle, args, out_dir: Path) -> dict:

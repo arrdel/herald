@@ -37,6 +37,10 @@ class TrainConfig:
     eval_every: int = 1_000
     log_every: int = 200
     seed: int = 0
+    #: Save an intermediate checkpoint every N steps, as ``{tag}_step{N}.pt``. Needed whenever a
+    #: quantity depends on *two* models at matched training budgets -- acceptance, for one, which
+    #: cannot be evaluated from inside either model's own loop.
+    checkpoint_every: int = 0
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     amp: bool = True
     num_workers: int = 4
@@ -122,6 +126,11 @@ def train_module(
             config.history.append(
                 {"step": step, "split": "val", **evaluate(model, val_dataset, loss_fn, config)}
             )
+            model.train()
+        if config.checkpoint_every and step and step % config.checkpoint_every == 0:
+            if config.out_dir is None:
+                raise ValueError("checkpoint_every requires out_dir")
+            save_checkpoint(model, config, Path(config.out_dir) / f"{tag}_step{step}.pt")
             model.train()
 
     if config.out_dir is not None:
