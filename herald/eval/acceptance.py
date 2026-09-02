@@ -94,6 +94,9 @@ def measure_acceptance(
     return {
         "acceptance": float(probs.mean()),
         "acceptance_std": float(probs.std()),
+        # The estimate is one Monte Carlo draw per token, so it carries sampling noise. Comparing
+        # acceptance across dimensions is only meaningful against this, not against the spread.
+        "acceptance_sem": float(probs.std() / max(1.0, probs.numel() ** 0.5)),
         "n_decisions": int(probs.numel()),
         "delta_median": float(gaps.median()),
         "delta_mean": float(gaps.mean()),

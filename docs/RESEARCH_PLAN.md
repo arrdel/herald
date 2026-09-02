@@ -237,10 +237,23 @@ statistic has had to survive the cheaper explanations first.
   learned models disagree on *scale* as well as location (effective divergence ≈ 2.8× the mean gap).
   Estimating continuous acceptance from mean differences alone will be far too optimistic.
 
-  *Open confound.* Training budget was fixed at 4,000 steps for every d, so part of the decay could
-  be relative undertraining at large d. Flat δ argues against it but does not settle it — see E1.1b.
-- **E1.1b** Repeat at **matched validation NLL** per dimension rather than matched step count. The
-  one serious hole in E1.1; cheap and CPU-only.
+  ~~*Open confound.* Training budget was fixed at 4,000 steps for every d.~~ **Closed by E1.1b/c.**
+- **E1.1b / E1.1c** **Done 2026-09-02.** Convergence traces at d ∈ {16, 128}, at 4× E1.1's budget
+  and at 250-step resolution. The fixed-budget confound is **refuted**: both dimensions plateau well
+  inside E1.1's 4,000 steps (d=16 by ~750, d=128 by ~500), where undertraining predicted d=128 still
+  climbing. Past 4,000 acceptance keeps *falling* at both d, because validation NLL turns over early
+  and draft and target overfit to *different* solutions — so E1.1's numbers were if anything generous
+  to large d.
+
+  The result worth carrying forward is the **matched-δ comparison**. Since δ drifts over training,
+  each dimension sweeps a range of model agreement, so acceptance can be compared at δ held equal:
+  the d=16 → d=128 penalty is **~60×** (median 62× over 15 pairs at the 4k budget, 64× over 7 pairs
+  at 16k). E1.1 argued the mechanism indirectly from δ being flat; this measures it directly, and it
+  is now the strongest single piece of evidence for C1's dimensional half.
+
+  *Also.* `measure_acceptance` was found to be drawing x from global RNG, so its `seed` argument was
+  not doing what it claimed. Fixed; E1.1 re-measured under the corrected sampler moved within a few
+  SEM (the 170× collapse reads 181×). The estimator now lives in `herald/eval/` under test.
 - **E1.2a** Same sweep, verifying a random *k*-dim projection. The null control: isolates "low
   dimension helps" from "*this* projection helps."
 - **E1.2b [IP]** Same sweep, verifying a **transform-domain statistic** — wavelet or

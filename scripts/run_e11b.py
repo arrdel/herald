@@ -30,6 +30,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import torch
+
 from herald.data.timeseries import build_bundle, load_etth1, synthetic_ar
 from herald.eval import DRAFT_ARCH, TARGET_ARCH, measure_acceptance
 from herald.models.ts_mar import MARConfig, TimeSeriesMAR
@@ -94,19 +96,51 @@ def run_one_dim(d: int, bundle, args, out_dir: Path) -> dict:
         ]
         print(f"  d={d} {name}: trained {args.mar_steps} steps")
 
+    # The final budget is saved as ``{tag}.pt`` rather than ``{tag}_step{N}.pt``, so it has to be
+    # asked for by name; leaving it out would cut the plateau off exactly where it matters most.
+    steps = list(range(args.checkpoint_every, args.mar_steps, args.checkpoint_every))
+
+    def acceptance_at(draft_step: int, target_step: int) -> dict:
+        def ckpt(tag: str, step: int) -> Path:
+            return dim_dir / (f"{tag}.pt" if step == args.mar_steps else f"{tag}_step{step}.pt")
+
+        return measure_acceptance(
+            load_checkpoint(ckpt("draft", draft_step)).to(device),
+            load_checkpoint(ckpt("target", target_step)).to(device),
+            tok_test, device=device, batch_size=args.batch_size,
+            max_batches=args.eval_batches, seed=args.seed,
+        )
+
     trace = []
-    for step in range(args.checkpoint_every, args.mar_steps, args.checkpoint_every):
-        draft = load_checkpoint(dim_dir / f"draft_step{step}.pt").to(device)
-        target = load_checkpoint(dim_dir / f"target_step{step}.pt").to(device)
-        row = measure_acceptance(draft, target, tok_test, device=device,
-                                 batch_size=args.batch_size, max_batches=args.eval_batches,
-                                 seed=args.seed)
+    for step in [*steps, args.mar_steps]:
+        row = acceptance_at(step, step)
         row["step"] = step
         trace.append(row)
         print(f"    d={d:<4d} step {step:>6d}  acceptance {row['acceptance']:.4f}  "
               f"delta {row['delta_median']:.4f}")
 
-    return {"d": d, "trace": trace, "val_nll": val_nll, "seconds": time.time() - t0}
+    # Validation NLL turns out to be non-monotone, so the trace above is partly a trace over how far
+    # each model has overfit rather than over how well it has converged. Each model's own
+    # best-validation checkpoint is the one that would actually be deployed, so measure there too.
+    # NLL is compared only within a single model: across d it is a density in a different dimension.
+    best = {}
+    for name in ("target", "draft"):
+        usable = [e for e in val_nll[name] if e["step"] in {*steps, args.mar_steps}]
+        best[name] = min(usable, key=lambda e: e["nll"]) if usable else None
+
+    best_row = None
+    if best["draft"] and best["target"]:
+        best_row = acceptance_at(best["draft"]["step"], best["target"]["step"])
+        best_row.update(
+            draft_step=best["draft"]["step"], target_step=best["target"]["step"],
+            draft_nll=best["draft"]["nll"], target_nll=best["target"]["nll"],
+        )
+        print(f"    d={d:<4d} best-val draft@{best['draft']['step']} "
+              f"target@{best['target']['step']}  acceptance {best_row['acceptance']:.4f}  "
+              f"delta {best_row['delta_median']:.4f}")
+
+    return {"d": d, "trace": trace, "best_val": best_row, "val_nll": val_nll,
+            "seconds": time.time() - t0}
 
 
 def main() -> None:
@@ -124,9 +158,15 @@ def main() -> None:
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--device", default="cpu")
+    # The host runs ~64 cores at a load average north of 60. Torch's default of one thread per core
+    # then spends its time contending rather than computing: measured on this box, these models step
+    # 22x slower at 32 threads than at 8. This is a property of the machine, not of the experiment.
+    p.add_argument("--threads", type=int, default=8)
     p.add_argument("--out", default="experiments/E1.1b-convergence")
     args = p.parse_args()
 
+    if args.threads:
+        torch.set_num_threads(args.threads)
     set_seed(args.seed)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -155,6 +195,9 @@ def main() -> None:
         cells = "".join(f"{r['trace'][i]['acceptance']:>12.4f}" for r in results)
         marker = "   <- E1.1's budget" if row["step"] == E11_BUDGET else ""
         print(f"{row['step']:>8}{cells}{marker}")
+    if all(r.get("best_val") for r in results):
+        cells = "".join(f"{r['best_val']['acceptance']:>12.4f}" for r in results)
+        print(f"{'best-val':>8}{cells}   <- each model at its own best validation NLL")
     print(f"\nwrote {out_dir / 'results.json'}")
 
 

@@ -364,8 +364,8 @@ evidence that δ is not small in the regime E0.3 will probe.
 **Caveats, and one is serious.** *The training budget is fixed at 4,000 steps for every d.* Larger-d
 models have more to learn on the same budget, so some of the decay could be relative undertraining
 rather than dimension. The flat δ argues against this being the whole story — an undertrained draft
-should disagree *more*, and δ does not rise — but it is not a proof, and the clean control is to
-train to matched validation NLL per dimension. That is the first follow-up. Beyond it: one dataset,
+should disagree *more*, and δ does not rise — but it is not a proof. **Settled by E1.1b/E1.1c
+below: the confound is refuted, and the penalty survives at matched δ.** Beyond it: one dataset,
 one seed, one arbitrary capacity gap (256/6 vs 128/4); the tokenizer is refit per d, so the latent
 distribution is not held fixed; and the head is a Gaussian mixture rather than a diffusion head, a
 deliberate choice (exact densities are the point) that makes the absolute rates non-transferable to
@@ -377,13 +377,91 @@ matters, since it measures δ on real MAR pairs.
 
 ---
 
+## 2026-09-02 — E1.1b / E1.1c — the training-budget confound is refuted, and at *matched* model agreement dimension still costs ~60×
+
+**Ran:** two convergence traces on the E1.1 testbed at the extremes `d ∈ {16, 128}`, each training a
+draft and a target and measuring acceptance at matched step counts from saved checkpoints.
+**E1.1b**, the long run: `--mar-steps 16000 --checkpoint-every 2000` (4× E1.1's budget), 65 min CPU,
+`experiments/E1.1b-convergence/`. **E1.1c**, the fine early trace: `--mar-steps 4000
+--checkpoint-every 250 --threads 8`, 16 min CPU, `experiments/E1.1c-earlytrain/`. Offline analysis
+in `scripts/analyze_e11b.py`; figures `docs/figures/e11b_convergence.png` and `e11c_earlytrain.png`.
+
+**Result 1 — the confound is refuted.** E1.1 fixed the budget at 4,000 steps for every `d`, so the
+worry was that large-`d` models were simply undertrained. They were not. Within E1.1's budget both
+dimensions **plateau early**, `d=16` by ~750 steps and `d=128` by ~500:
+
+| step | 250 | 500 | 750 | 1000 | 2000 | 3000 | 4000 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| acceptance, d=16 | 0.3403 | 0.2319 | 0.1981 | 0.1877 | 0.2003 | 0.1750 | 0.1793 |
+| acceptance, d=128 | 0.0444 | 0.0048 | 0.0044 | 0.0050 | 0.0017 | 0.0019 | 0.0020 |
+
+Undertraining at large `d` predicts `d=128` still climbing at 4,000 and the two curves converging.
+Neither happens. The prediction was committed to in the script docstring before the run.
+
+**Result 2 — past E1.1's budget acceptance keeps *falling*, because the models overfit apart.**
+Over 2k→14k steps acceptance goes 0.1777 → 0.0714 at `d=16` and 0.0051 → 0.0007 at `d=128`, while
+validation NLL *rises* throughout (target `d=16`: 13.5 → 26.3) and per-coordinate disagreement grows
+(δ 0.227 → 0.342 at `d=128`). Draft and target overfit to *different* solutions, so training longer
+makes them disagree more. E1.1's 4,000-step numbers were therefore, if anything, generous to
+large `d` — the honest correction runs against us in the safe direction.
+
+**Result 3 — the matched-δ comparison, which is the real prize.** Because δ drifts over training,
+each dimension sweeps out a *range* of model agreement, so acceptance can be compared at δ held
+equal rather than at budget held equal. Interpolating `d=128`'s acceptance (in log space, no
+extrapolation) to each `d=16` checkpoint's δ:
+
+| | pairs | δ range | d=16 → d=128 penalty |
+| --- | --- | --- | --- |
+| E1.1c (4k budget) | 15 | 0.19–0.29 | 16×–117×, **median 62×** |
+| E1.1b (16k budget) | 7 | 0.26–0.33 | 55×–92×, **median 64×** |
+
+Two independent runs at different budgets agree on ~60×. E1.1 could only argue this indirectly, from
+δ happening to be flat across the sweep; here the matching is direct, and it is the cleanest
+statement of the dimensional mechanism we have.
+
+**Result 4 — at each model's own best-validation checkpoint**, acceptance is 0.2164 at `d=16`
+(draft@1500, target@1000) and 0.0010 at `d=128` (draft@1500, target@2750). *This 216× should not be
+quoted as the headline*: best-val selects **different budgets for draft and target**, and a mismatched
+pair disagrees more for reasons that have nothing to do with dimension — note 0.0010 is below every
+matched-step value in the `d=128` trace. The matched-δ ~60× is the defensible number.
+
+**A defect found and fixed in our own instrument.** Writing the first test for `measure_acceptance`
+revealed that its `seed` argument only seeded the mask: `MixtureSameFamily.sample()` takes no
+generator, so the draw of `x` — and therefore the acceptance estimate — followed ambient global RNG
+state. Repeat measurements of the same model pair differed by ~5e-4. Now forked and seeded.
+**E1.1 was re-measured under the fixed sampler** (`run_e11.py --measure-only`, inference only):
+every dimension moved within a few SEM, and the headline 170× d=4→d=128 collapse reads 181×. The
+result stands; `experiments/E1.1-dsweep/results_remeasured.json` keeps both so they can be compared.
+
+**Reading.** The one serious hole in E1.1 is closed, and closed in a way that strengthens it rather
+than merely defending it: the dimensional penalty survives holding per-coordinate agreement fixed,
+which is the control that distinguishes "acceptance falls with `d`" from "the draft is worse at
+large `d`". C1's dimensional half is now supported by a direct matched comparison rather than by an
+observation that a nuisance variable happened not to move.
+
+**Caveats.** Still one dataset, one seed, one capacity gap, one tokenizer refit per `d` — E1.1's
+structural caveats are untouched, and only the two extreme dimensions were traced. The plateau is
+established within 4,000 steps but the models never reach a genuine optimum: validation NLL turns
+over early and then degrades, so "converged" here means "stopped improving", not "well trained".
+Matched-δ interpolation assumes acceptance depends on the checkpoint only through δ, which is not
+exactly true — the scale gap moves too, and it moves in the same direction, so some of the 60× may
+be scale rather than location disagreement. Finally, CPU training is not bit-reproducible across
+thread counts: an independent `d=16` run at 8 threads gave 0.1731 at step 4000 against 0.1494 here.
+The trend is robust to that; individual cells are not.
+
+**Changes:** `measure_acceptance` moved into `herald/eval/` so E1.1, E1.1b, and the E1.2/E1.3 ladder
+cannot drift apart, with the RNG fix and six tests. `TrainConfig.checkpoint_every` added. No change
+to the method or to C1's statement.
+
+---
+
 ## Next up
 
-- **E1.1b** Re-run at matched validation NLL per dimension, to remove the fixed-training-budget
-  confound. Cheap, CPU-only, and it closes the one serious hole in E1.1.
-- **E0.3** The capture run, blocked only on GPU availability — all 8 A6000s have been fully
-  allocated to another user (47.7 GB each, ~985 MiB free) for the whole session. Harness first.
-- **E0.1b** The FID-50K gate for MAR-B/L and D-JEPA-B, when GPUs are free.
-- **E0.2** Reproduce CSpD's 2.33× at its defaults.
-- **E0.3** The temperature sweep on real models. Blocks everything downstream.
+- **E1.2a** The null control: same sweep, verifying a random *k*-dim projection. CPU-only, so it can
+  run while the GPUs stay occupied, and it is the first rung of the ladder that E1.3 must clear.
+- **E0.3** The temperature sweep on real models — the capture run. Blocks everything downstream.
+  Harness built and tested; blocked only on GPU availability, with all 8 A6000s fully allocated to
+  another user (47.7 GB each, ~1.4 GiB free) for this entire session.
 - **E0.4** The pixel-domain audit, on E0.3's samples, in the same sitting.
+- **E0.2** Reproduce CSpD's 2.33× at its defaults.
+- **E0.1b** The FID-50K gate for MAR-B/L and D-JEPA-B, when GPUs are free.

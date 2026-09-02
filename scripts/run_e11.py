@@ -40,6 +40,7 @@ from herald.models.ts_tokenizer import TimeSeriesTokenizer, TokenizerConfig
 from herald.train.timeseries import (
     CachedTokenDataset,
     TrainConfig,
+    load_checkpoint,
     mar_loss,
     set_seed,
     tokenizer_loss,
@@ -53,6 +54,34 @@ def git_commit() -> str:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     except Exception:
         return "unknown"
+
+
+def measure_from_checkpoints(d: int, bundle, args, out_dir: Path) -> dict:
+    """Re-measure a dimension from its saved checkpoints, without retraining.
+
+    Added after the acceptance estimator was found to be drawing x from the global RNG, which left
+    the reported rates carrying an uncontrolled Monte Carlo component. Re-measuring is inference
+    only, so the committed numbers can be checked in minutes rather than by repeating the sweep.
+    """
+    device = args.device
+    dim_dir = out_dir / f"d{d}"
+    tokenizer = load_checkpoint(dim_dir / "tokenizer.pt").to(device)
+    tok_test = CachedTokenDataset(bundle.test, tokenizer, device=device)
+    draft = load_checkpoint(dim_dir / "draft.pt").to(device)
+    target = load_checkpoint(dim_dir / "target.pt").to(device)
+
+    result = measure_acceptance(
+        draft, target, tok_test, device=device, batch_size=args.batch_size, seed=args.seed
+    )
+    result["d"] = d
+    result["n_tokens"] = args.window // args.patch
+    result["analytic_at_measured_delta"] = analytic_acceptance_shared_covariance(
+        result["delta_median"], d
+    )
+    result["target_params"] = sum(p.numel() for p in target.parameters())
+    result["draft_params"] = sum(p.numel() for p in draft.parameters())
+    result["seconds"] = 0.0
+    return result
 
 
 def run_one_dim(d: int, bundle, args, out_dir: Path) -> dict:
@@ -162,6 +191,8 @@ def plot_results(rows: list[dict], path: Path) -> Path:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--plot-only", action="store_true", help="regenerate the figure from results.json")
+    p.add_argument("--measure-only", action="store_true",
+                   help="re-measure acceptance from saved checkpoints without retraining")
     p.add_argument("--figure", default="docs/figures/e11_acceptance_vs_d.png")
     p.add_argument("--dims", type=int, nargs="+", default=[4, 8, 16, 32, 64, 128])
     p.add_argument("--dataset", default="etth1", choices=["etth1", "synthetic"])
@@ -193,7 +224,8 @@ def main() -> None:
 
     rows = []
     for d in args.dims:
-        row = run_one_dim(d, bundle, args, out_dir)
+        row = measure_from_checkpoints(d, bundle, args, out_dir) if args.measure_only \
+            else run_one_dim(d, bundle, args, out_dir)
         rows.append(row)
         print(
             f"d={d:4d}  acceptance {row['acceptance']:.4f}  "
@@ -202,8 +234,11 @@ def main() -> None:
             f"analytic {row['analytic_at_measured_delta']:.4f}  "
             f"({row['seconds']:.0f}s)"
         )
-        (out_dir / "results.json").write_text(json.dumps({
-            "experiment": "E1.1",
+        # Never overwrite the committed sweep from a re-measurement: the point of re-measuring is to
+        # compare the two, which is impossible if the second run silently replaces the first.
+        results_path = out_dir / ("results_remeasured.json" if args.measure_only else "results.json")
+        results_path.write_text(json.dumps({
+            "experiment": "E1.1-remeasured" if args.measure_only else "E1.1",
             "commit": git_commit(),
             "host": platform.node(),
             "config": vars(args),
@@ -217,8 +252,9 @@ def main() -> None:
         print(f"{r['d']:>5} {r['acceptance']:>11.4f} {r['delta_median']:>8.4f} "
               f"{r['log_sigma_gap_median']:>8.4f} "
               f"{r['analytic_at_measured_delta']:>9.4f} {r['fraction_certain_accept']:>8.3f}")
-    print(f"\nwrote {out_dir / 'results.json'}")
-    print(f"wrote {plot_results(rows, Path(args.figure))}")
+    print(f"\nwrote {results_path}")
+    if not args.measure_only:
+        print(f"wrote {plot_results(rows, Path(args.figure))}")
 
 
 if __name__ == "__main__":
