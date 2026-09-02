@@ -318,8 +318,69 @@ between-image gain spread is logged as a Phase-2 design item.
 
 ---
 
+## 2026-09-02 — E1.1 — acceptance collapses as `d^0.52` while per-coordinate disagreement stays flat. The dimensional mechanism is real.
+
+**Ran:** `python scripts/run_e11.py --dims 4 8 16 32 64 128 --tok-steps 2000 --mar-steps 4000
+--device cpu`. ETTh1 (7 channels, 17,420 hours), window 96, patch 8 → 12 tokens. Per `d`: a patch
+VAE, then a target MAR (width 256, depth 6) and a draft MAR (width 128, depth 4) on its latents,
+architectures held fixed across the sweep so the capacity gap does not drift. 39 min on CPU, since
+all eight GPUs remained allocated elsewhere. Results in `experiments/E1.1-dsweep/results.json`,
+figure at `docs/figures/e11_acceptance_vs_d.png`.
+
+**Result:**
+
+| d | exact acceptance | δ (mean gap) | \|log σ_p/σ_q\| | equal-cov. analytic | M_eff | M_eff/√d |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4 | 0.6420 | 0.129 | 0.065 | 0.898 | 0.93 | 0.465 |
+| 8 | 0.4048 | 0.181 | 0.083 | 0.798 | 1.67 | 0.589 |
+| 16 | 0.1761 | 0.225 | 0.101 | 0.653 | 2.71 | 0.676 |
+| 32 | 0.0734 | 0.218 | 0.098 | 0.537 | 3.58 | 0.633 |
+| 64 | 0.0170 | 0.195 | 0.102 | 0.436 | 4.78 | 0.597 |
+| 128 | 0.0038 | 0.197 | 0.096 | 0.264 | 5.79 | 0.512 |
+
+Acceptance falls **170×** from d=4 to d=128. Inverting each rate to an effective Mahalanobis
+distance gives a power-law fit of **M_eff ∝ d^0.519**, against the √d law's predicted 0.500, with
+M_eff/√d flat at 0.579 ± 0.071.
+
+**Reading.** This is the plot C1 is built around, and it behaves as §1b predicts. The important
+control is the second column: **δ is flat from d=16 onward** (0.225, 0.218, 0.195, 0.197), as is the
+scale gap (~0.10). So the collapse across the upper half of the sweep is not the draft getting worse
+at larger d — per-coordinate agreement is unchanged and acceptance still falls 46×. That is the
+dimensional mechanism isolated, which acceptance alone could never have shown. Between d=4 and d=16
+δ does grow, so the early decay mixes the two effects and should not be quoted as purely dimensional.
+
+**The equal-covariance closed form is badly optimistic, and that strengthens C1.** Eq. 45 of
+arXiv 2606.13426, evaluated at the measured δ, predicts 0.264 at d=128 where the truth is 0.0038 —
+a factor of 70. The effective per-coordinate divergence is ~2.8× the mean gap alone (0.579 vs
+0.209). The missing part is scale and shape: learned draft and target disagree on variance, not just
+location, and a mean-gap-only formula cannot see it. Anyone estimating continuous acceptance from
+mean differences will substantially overestimate it.
+
+**At d=16 — MAR's actual token dimension — exact acceptance is 0.176.** That is the directly
+C1-relevant number from this testbed, and it is low enough that a method would need to relax
+something. It is not MAR, and it should not be quoted as if it were, but it is the first measured
+evidence that δ is not small in the regime E0.3 will probe.
+
+**Caveats, and one is serious.** *The training budget is fixed at 4,000 steps for every d.* Larger-d
+models have more to learn on the same budget, so some of the decay could be relative undertraining
+rather than dimension. The flat δ argues against this being the whole story — an undertrained draft
+should disagree *more*, and δ does not rise — but it is not a proof, and the clean control is to
+train to matched validation NLL per dimension. That is the first follow-up. Beyond it: one dataset,
+one seed, one arbitrary capacity gap (256/6 vs 128/4); the tokenizer is refit per d, so the latent
+distribution is not held fixed; and the head is a Gaussian mixture rather than a diffusion head, a
+deliberate choice (exact densities are the point) that makes the absolute rates non-transferable to
+MAR.
+
+**Changes:** none to the method. C1's dimensional half now has direct empirical support in a
+controlled setting, with the mechanism — not just the trend — verified. E0.3 remains the test that
+matters, since it measures δ on real MAR pairs.
+
+---
+
 ## Next up
 
+- **E1.1b** Re-run at matched validation NLL per dimension, to remove the fixed-training-budget
+  confound. Cheap, CPU-only, and it closes the one serious hole in E1.1.
 - **E0.3** The capture run, blocked only on GPU availability — all 8 A6000s have been fully
   allocated to another user (47.7 GB each, ~985 MiB free) for the whole session. Harness first.
 - **E0.1b** The FID-50K gate for MAR-B/L and D-JEPA-B, when GPUs are free.

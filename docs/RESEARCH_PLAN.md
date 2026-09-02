@@ -226,9 +226,21 @@ test lives in*, and measure acceptance at matched guarantee strength. E1.2 and E
 of controls running from no structure to learned structure, so that any gain credited to the JEPA
 statistic has had to survive the cheaper explanations first.
 
-- **E1.1** Time-series testbed (ETTh1, UCI Electricity), MAR-style continuous AR trained from
-  scratch. Sweep token dim `d ∈ {4, 8, 16, 32, 64, 128}`. Plot exact-acceptance rate vs. *d*.
-  Predicted: sharp decay. *This is the plot the paper is built around.*
+- **E1.1** **Done 2026-09-02.** Time-series testbed (ETTh1), MAR-style continuous AR trained from
+  scratch, `d ∈ {4, 8, 16, 32, 64, 128}`. Predicted sharp decay; observed acceptance
+  0.642 → 0.0038, a 170× fall, fitting **M_eff ∝ d^0.519** against the √d law's 0.500. The control
+  that makes it a mechanism rather than a trend: per-coordinate disagreement δ is *flat* from d=16
+  on, so acceptance falls 46× with model agreement unchanged. At MAR's d=16, exact acceptance is
+  0.176. Figure: `docs/figures/e11_acceptance_vs_d.png`.
+
+  Also found: the equal-covariance closed form overestimates acceptance by 70× at d=128, because
+  learned models disagree on *scale* as well as location (effective divergence ≈ 2.8× the mean gap).
+  Estimating continuous acceptance from mean differences alone will be far too optimistic.
+
+  *Open confound.* Training budget was fixed at 4,000 steps for every d, so part of the decay could
+  be relative undertraining at large d. Flat δ argues against it but does not settle it — see E1.1b.
+- **E1.1b** Repeat at **matched validation NLL** per dimension rather than matched step count. The
+  one serious hole in E1.1; cheap and CPU-only.
 - **E1.2a** Same sweep, verifying a random *k*-dim projection. The null control: isolates "low
   dimension helps" from "*this* projection helps."
 - **E1.2b [IP]** Same sweep, verifying a **transform-domain statistic** — wavelet or
