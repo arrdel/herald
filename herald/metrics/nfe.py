@@ -77,40 +77,90 @@ class NFELedger:
         return "\n".join(rows)
 
 
+#: The two forks name their transformer stages differently. MAR uses ``forward_mae_encoder`` /
+#: ``forward_mae_decoder``; D-JEPA renamed them to ``forward_encoder`` / ``forward_decoder``.
+#: Wrapping only one convention silently records nothing on the other fork, which would leave the
+#: transformer half of the split empty and make the denoising head look like 100% of the work.
+_ENCODER_NAMES = ("forward_mae_encoder", "forward_encoder")
+_DECODER_NAMES = ("forward_mae_decoder", "forward_decoder")
+
+
+def _token_count(t) -> int:
+    """Token evaluations represented by a transformer input.
+
+    A sequence tensor ``(batch, positions, width)`` is ``batch * positions`` token evaluations, not
+    ``batch``. Counting rows would put the transformer in units of *sequences* while the denoising
+    head is counted in *token-diffusion-steps*, and the resulting ratio -- which is what the
+    free-drafter claim is argued from -- would be meaningless.
+    """
+    if not torch.is_tensor(t):
+        return 1
+    if t.dim() >= 3:
+        return int(t.shape[0] * t.shape[1])
+    return int(t.shape[0])
+
+
+def diffusion_steps_per_call(diffloss) -> int:
+    """How many denoising evaluations one ``diffloss.sample`` call actually performs.
+
+    ``DiffLoss.sample`` runs ``gen_diffusion.p_sample_loop``, which evaluates the denoising MLP
+    once per respaced timestep -- around 100 by default. Counting the call as a single evaluation
+    per token understates the head by two orders of magnitude and would make the free-drafter
+    argument look far weaker than it is, so the multiplier is read off the diffusion object rather
+    than assumed.
+    """
+    gen = getattr(diffloss, "gen_diffusion", None)
+    steps = getattr(gen, "num_timesteps", None)
+    if not isinstance(steps, int) or steps < 1:
+        raise ValueError(
+            "could not read the denoising step count from diffloss.gen_diffusion.num_timesteps; "
+            "refusing to report an NFE breakdown that would silently be ~100x too small"
+        )
+    return steps
+
+
 def instrument_mar_sampler(model, ledger: NFELedger):
     """Patch a MAR/D-JEPA model in place so sampling populates ``ledger``.
 
-    Returns a callable that restores the original methods. Only wraps methods that exist, so it
-    works across the MAR and D-JEPA forks without branching on model class.
+    Returns a callable that restores the original methods. Handles both forks' naming.
+
+    Under classifier-free guidance every stage runs on a doubled batch, and that doubling is
+    recorded rather than divided out: it is real compute that any honest speedup comparison has to
+    account for.
     """
-    originals = {}
+    originals: dict[str, object] = {}
+    # Methods that live on the class rather than the instance must be *deleted* on restore, not
+    # reassigned. Reassigning leaves an instance attribute shadowing the class method, so a second
+    # instrument/restore cycle would wrap the already-wrapped copy and double-count.
+    was_instance_attr: dict[str, bool] = {}
 
-    def wrap(name: str, component: str, count_tokens):
-        fn = getattr(model, name, None)
-        if fn is None:
+    def wrap_first(names: tuple[str, ...], component: str) -> None:
+        for name in names:
+            fn = getattr(model, name, None)
+            if fn is None:
+                continue
+            originals[name] = fn
+            was_instance_attr[name] = name in vars(model)
+
+            def wrapped(*args, _fn=fn, _component=component, **kwargs):
+                t = args[0] if args else next(iter(kwargs.values()))
+                with ledger.timed(_component, _token_count(t)):
+                    return _fn(*args, **kwargs)
+
+            setattr(model, name, wrapped)
             return
-        originals[name] = fn
 
-        def wrapped(*args, **kwargs):
-            with ledger.timed(component, count_tokens(args, kwargs)):
-                return fn(*args, **kwargs)
-
-        setattr(model, name, wrapped)
-
-    def first_arg_rows(args, kwargs):
-        t = args[0] if args else next(iter(kwargs.values()))
-        return t.shape[0] if torch.is_tensor(t) else 1
-
-    wrap("forward_encoder", "encoder", first_arg_rows)
-    wrap("forward_decoder", "decoder", first_arg_rows)
+    wrap_first(_ENCODER_NAMES, "encoder")
+    wrap_first(_DECODER_NAMES, "decoder")
 
     diffloss = getattr(model, "diffloss", None)
     if diffloss is not None and hasattr(diffloss, "sample"):
         originals["diffloss.sample"] = diffloss.sample
         inner = diffloss.sample
+        steps = diffusion_steps_per_call(diffloss)
 
         def wrapped_sample(z, *args, **kwargs):
-            with ledger.timed("diffusion_head", z.shape[0]):
+            with ledger.timed("diffusion_head", z.shape[0] * steps):
                 return inner(z, *args, **kwargs)
 
         diffloss.sample = wrapped_sample
@@ -119,7 +169,9 @@ def instrument_mar_sampler(model, ledger: NFELedger):
         for name, fn in originals.items():
             if name == "diffloss.sample":
                 model.diffloss.sample = fn
-            else:
+            elif was_instance_attr.get(name, True):
                 setattr(model, name, fn)
+            else:
+                delattr(model, name)
 
     return restore

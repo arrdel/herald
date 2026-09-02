@@ -16,8 +16,8 @@ outputs/
 *.npz
 fid_stats/
 
-# Data
-data/
+# Data. Anchored: a bare `data/` also matches herald/data/, which is source.
+/data/
 *.tar
 *.zip
 
