@@ -62,9 +62,15 @@ without any structure whatsoever. So "low-dimensional verification restores acce
 established *by the null control* and is not evidence for a learned projection.
 
 **What C2 must therefore claim is fidelity, not acceptance.** At matched *k* every rule sits at
-roughly the same acceptance, so a semantic projection can only win on *what it discards*. C2 is
-scored against the E1.2a curve at matched *k*, on sample quality — never against raw token-space
-verification.
+roughly the same acceptance, so a semantic projection can only win on *what it discards*.
+
+E1.2-frontier makes that concrete. Running a full speculative step with the correct residual
+sampler, the acceptance a random projection buys costs about **0.4 nats per discarded dimension**,
+and the total cost is well described by `(d − k)·c(k)` — the per-dimension figure matches across a
+4× range of *d*. So **acceptance is governed by the dimension you verify, fidelity by the dimension
+you don't**, and low-dimensional verification is not a free lunch at scale but a linearly expensive
+one. C2 therefore reduces to a single measurable number: HERALD's projection must achieve a **lower
+`c(k)`** than a random one.
 
 **C3 (method, to be earned).** HERALD achieves ≥2× fewer NFE than CSpD at matched FID/CMMD,
 while carrying a *stronger* guarantee than CSpD actually delivers: distribution-free,

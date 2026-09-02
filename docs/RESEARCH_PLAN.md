@@ -277,6 +277,22 @@ statistic has had to survive the cheaper explanations first.
   propose. **The interesting axis is therefore fidelity at matched `k`, not acceptance at matched
   `k`**, since at matched `k` every rule sits at roughly the same acceptance. E1.2b and E1.3 must be
   scored on what they *discard*, and this experiment does not measure that. See the risk table.
+- **E1.2-frontier** **Done 2026-09-02, no GPU.** Measures what E1.2a's acceptance actually costs, by
+  running a full speculative step with the true `(p−q)₊` residual sampler and reporting excess NLL
+  under the target. Anchored on losslessness: the exact rule reads −0.003 ± 0.052 at `d=16`.
+
+  **The acceptance is not free — it costs ~0.4 nats per discarded dimension.** The fidelity cost is
+  well described by **`(d − k) · c(k)`**, with the per-unverified-dimension cost matching across a
+  4× range of `d` at every shared `k` (e.g. 0.317 at `d=16` vs 0.313 at `d=64`, for `k=4`). So
+  **acceptance is governed by the dimension you verify, fidelity by the dimension you don't** — and
+  since the cost grows linearly in `d` while the acceptance gain does not, naive low-dimensional
+  verification degrades exactly where it looks most attractive (at `d=64`, `k=4` buys 0.62
+  acceptance for 18.8 nats/token).
+
+  *This is what makes C2 testable.* A structured or learned statistic cannot win on acceptance; it
+  can only win by having a **lower `c(k)`**, i.e. by discarding directions that do not matter. That
+  is one number, and it is precisely what the JEPA framing asserts. **E1.2b and E1.3 are scored on
+  `c(k)`.** If theirs matches a random projection's, the falsifier below has fired.
 - **E1.2b [IP]** Same sweep, verifying a **transform-domain statistic** — wavelet or
   steerable-pyramid subband energies, DCT coefficient statistics, the local mean/variance/
   covariance triple that SSIM is built from, radially-averaged spectral bands. Structured,
@@ -379,7 +395,8 @@ entire claim is about the second, so a table reporting only the first is not evi
 | **Semantic acceptance costs high-frequency detail** | Genuinely likely, and it would damage C3. E0.4 detects it on CSpD before we build anything; E2.5 quantifies it for HERALD. If it fires, try the Jacobian-weighted score from E0.5, and failing that report an explicit semantic-fidelity vs. detail-fidelity tradeoff curve instead of a free speedup. |
 | **Transform-domain control matches JEPA** | Not project-ending. Retarget to the transform rule, which is cheaper, training-free, and interpretable; the acceleration result survives and the "reuse the discarded verifier" narrative does not. Decide this on E1.2b/E2.2b, not on which story reads better. |
 | **Transform-domain verification is already published** | ~~Unverified as of the 2026-08-29 sweep.~~ **Swept 2026-09-02 (18 queries): clear in its literal form — build it.** But the coarse-grained-verification *construction* is owned in discrete spaces (PCG 2511.13732 explicitly claims it; also LANTERN, GSD, CASCADE), frequency-domain statistics already drive in-loop skip decisions (FreqCa, SpectralCache, SeaCache), and ABC has owned "acceptance collapses with dimension, so accept on a summary" since Fearnhead & Prangle 2012. Cite all three as prior; claim only the continuous-space instantiation and the guarantee. Read GSD and CASCADE in full before writing. |
-| **Acceptance gains are free, so C2 is vacuous as worded** | **Fired 2026-09-02 (E1.2a).** A random orthonormal projection recovers acceptance from 0.0035 to 0.64 at d=128, and acceptance depends on the verified dim `k` essentially alone (CoV 1.3–8.4% across a 32× range of `d`). The low-dimensional half of C2 is established *by the null control*. Not project-ending, but it moves the burden: **E1.2b and E1.3 are scored on fidelity at matched `k`, against E1.2a's curve**, never on acceptance and never against raw verification. C2 restated in the README accordingly. |
+| **Acceptance gains are free, so C2 is vacuous as worded** | **Fired 2026-09-02 (E1.2a), then partly resolved the same day (E1.2-frontier).** A random projection recovers acceptance from 0.0035 to 0.64 at d=128, and acceptance depends on the verified dim `k` essentially alone — so the low-dimensional half of C2 is established by the null control. But the acceptance is *not* free: it costs ~0.4 nats per discarded dimension, scaling as `(d−k)·c(k)`. **The burden moves rather than vanishes: E1.2b and E1.3 are scored on `c(k)`**, never on acceptance and never against raw verification. C2 restated in the README as a claim about `c(k)`. |
+| **A learned projection has the same `c(k)` as a random one** | The successor to the risk above, and now the sharpest way C2 dies. If HERALD's semantic projection discards as much target likelihood per dimension as a random one, then it is not finding structure and the JEPA framing is decoration — regardless of how good the acceptance numbers look. Measured directly by `herald/eval/fidelity.py`; decide it on E1.2b/E1.3 and report it the day it happens. |
 | **Fast-ARDiff already owns the frontier** | **New 2026-09-02.** arXiv 2512.08537 reports 4.38×–4.88× on ImageNet 256 with FID preserved (MAR-H 4.47× at FID 1.61), in exactly our setting, building on CSpD. C3's target is now this, not CSpD's 2.33×. It also endorses the accumulated-variance factor, which forced the E0.3a correction. Read it in full before Phase 2. |
 
 ---

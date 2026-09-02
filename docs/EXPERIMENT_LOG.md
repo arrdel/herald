@@ -601,14 +601,81 @@ slightly past their best validation NLL.
 
 ---
 
+## 2026-09-02 — E1.2-frontier — the acceptance E1.2a called "free" costs ~0.4 nats per discarded dimension. Acceptance is set by `k`; fidelity is set by `d − k`.
+
+**Ran:** `python scripts/run_e12_frontier.py --dims 16 64 --n-projections 3 --eval-batches 20`.
+No training, no GPU, 31 s on CPU, on E1.1's checkpoints. Each rule runs a full speculative step:
+accept the draft's proposal on the projected statistic, and **on rejection draw from the true
+residual `(p − q)₊`** by rejection sampling with `p` as the proposal. Metric is *excess NLL under the
+target* — how many nats less likely the emitted tokens are under `p` than genuine `p` samples.
+Harness in `herald/eval/fidelity.py`, results in `experiments/E1.2-frontier/`, figure at
+`docs/figures/e12_frontier.png`.
+
+**Why the residual sampler matters more than it looks.** With the exact rule and a correct residual,
+`q·min(1,p/q) + (1−Ā)·(p−q)₊/Z = p` exactly, so the anchor must read zero. It does: **−0.0031 ±
+0.0520** at d=16 and **+0.1251 ± 0.1375** at d=64, with the rejection sampler converging on 100% of
+tokens. Had rejection simply resampled from `p` — the one-line version, and what a real
+implementation often does — even exact verification would have scored as lossy and every number
+below would have been measuring the harness instead of the rule.
+
+**Result.**
+
+| k | d=16 acceptance | d=16 excess NLL | ÷(d−k) | d=64 acceptance | d=64 excess NLL | ÷(d−k) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.8475 | 6.40 | **0.426** | 0.8675 | 27.61 | **0.438** |
+| 2 | 0.7419 | 5.35 | **0.382** | 0.7770 | 24.10 | **0.389** |
+| 4 | 0.5960 | 3.80 | **0.317** | 0.6216 | 18.77 | **0.313** |
+| 8 | 0.3531 | 1.42 | **0.178** | 0.4094 | 11.30 | **0.202** |
+| 16 | — | — | — | 0.1965 | 4.45 | 0.093 |
+| 32 | — | — | — | 0.0686 | 1.09 | 0.034 |
+| exact | 0.1613 | **−0.003** | — | 0.0138 | **+0.125** | — |
+
+**Two variables, cleanly separated.** E1.2a found acceptance is a function of the verified dimension
+`k` alone. This finds the fidelity cost is, to a good approximation, **`(d − k) × c(k)`** — the
+per-unverified-dimension cost matches across a 4× range of `d` at every shared `k` (0.426 vs 0.438,
+0.382 vs 0.389, 0.317 vs 0.313, 0.178 vs 0.202). So:
+
+> **Acceptance is governed by the dimension you verify. Fidelity is governed by the dimension you
+> *don't*.**
+
+**This is the correction E1.2a needed, and it changes the outlook.** E1.2a's headline — a random
+projection lifts acceptance from 0.0035 to 0.64 at d=128 — read as though low-dimensional
+verification were nearly free. It is not: at d=64, `k=4` buys acceptance 0.62 for **18.8 nats per
+token**. Worse, the cost grows *linearly in `d`* while the acceptance gain does not, so the naive
+"just verify a few dimensions" strategy gets steadily worse exactly where it looks most attractive.
+A low-dimensional acceptance rule is not a free lunch at scale; it is a linearly expensive one.
+
+**And it makes C2 falsifiable in a useful way.** Since acceptance at matched `k` is the same for
+every rule, a structured or learned statistic can only win by having a **lower `c(k)`** — by
+discarding directions that do not matter. That is now a single measurable number, and it is exactly
+the claim the JEPA framing makes. E1.2b and E1.3 are scored on `c(k)`, and if their `c(k)` matches a
+random projection's, the framing is decoration and the falsifier in the plan has fired.
+
+**Caveats.** Excess NLL is a cross-entropy gap, `CE(p̃,p) − H(p)`, which equals `KL(p̃‖p) + H(p̃) −
+H(p)`; it is zero iff `p̃ = p` and it is the right *direction*, but it is not itself a divergence,
+and a rule that emitted an over-*concentrated* distribution could in principle score well on it. A
+proper `KL(p̃‖p)` estimate is computable from the same quantities and is the obvious follow-up. NLL
+in nats/token is not comparable across `d` (different-dimensional densities), which is why the
+`÷(d−k)` column and not the raw column is the cross-`d` claim. Only two dimensions and three draws
+of `A` per `k`; spread across draws is visible at `k=8`, d=64 (9.3 to 13.7). Same checkpoints,
+dataset and capacity gap as E1.1, and the linear-in-`(d−k)` fit rests on four shared `k` values, so
+it is a strong regularity rather than an established law.
+
+**Changes:**
+- `herald/eval/fidelity.py` added: `residual_sample` (true `(p−q)₊` rejection sampler, skipping
+  positions that were accepted) and `measure_fidelity`. Six tests, anchored on losslessness.
+- The ladder's scoring axis is now explicit: **`c(k)`, the per-discarded-dimension fidelity cost.**
+  E1.2b/E1.3 report it, and neither is worth running on acceptance alone.
+
+---
+
 ## Next up
 
-- **E1.2-fidelity** The measurement E1.2a showed the ladder actually needs: at matched `k`, what does
-  each rule *discard*? Acceptance is now known to be a function of `k` alone, so it cannot separate
-  the rungs — reconstruction error and distributional distance on the accepted tokens can. This has
-  to exist before E1.2b is worth running, and it is CPU-only.
-- **E1.2b** The transform-domain statistic. Literature-cleared 2026-09-02; read GSD and CASCADE in
-  full first, and frame against PCG/FreqCa/ABC as prior rather than as insight.
+- **E1.2b** The transform-domain statistic, scored on `c(k)` against E1.2-frontier's random-projection
+  curve. Literature-cleared 2026-09-02; read GSD and CASCADE in full first, and frame against
+  PCG/FreqCa/ABC as prior rather than as insight.
+- **`KL(p̃‖p)` estimator** to replace the cross-entropy gap as the fidelity metric. Computable from
+  quantities `measure_fidelity` already forms; closes the one real hole in E1.2-frontier.
 - **E0.3** The temperature sweep on real models — the capture run. Blocks everything downstream.
   Harness built and tested; blocked only on GPU availability, with all 8 A6000s fully allocated to
   another user (47.7 GB each, ~1.4 GiB free) for this entire session.
