@@ -98,6 +98,31 @@ def test_tokenizer_shapes_across_the_d_sweep():
         assert tok.decode(posterior.sample()).shape == x.shape
 
 
+def test_cached_token_dataset_matches_shapes_and_stays_stochastic():
+    """The cache must store posterior *parameters*, not a drawn sample.
+
+    If it cached samples, the E1.1 models would train against a fixed deterministic dataset and
+    quietly lose the posterior noise that the encode-on-access version provides.
+    """
+    from herald.data.timeseries import build_bundle, synthetic_ar
+    from herald.train import CachedTokenDataset
+
+    bundle = build_bundle(synthetic_ar(n_steps=400, n_channels=2), window=32, stride=8)
+    tok = TimeSeriesTokenizer(TokenizerConfig(n_channels=2, patch=8, latent_dim=4, hidden=32, depth=1))
+    ds = CachedTokenDataset(bundle.train, tok)
+
+    assert len(ds) == len(bundle.train)
+    assert ds[0].shape == (4, 4)
+    torch.manual_seed(0)
+    a = ds[0]
+    torch.manual_seed(1)
+    b = ds[0]
+    assert not torch.allclose(a, b), "repeated access must resample the posterior"
+    # ...but around the same mean, so it is the same window each time.
+    draws = torch.stack([ds[0] for _ in range(64)])
+    assert torch.allclose(draws.mean(0), ds.mean[0], atol=0.5)
+
+
 def test_tokenizer_kl_is_nonnegative_and_zero_at_the_prior():
     from herald.models import DiagonalGaussian
 

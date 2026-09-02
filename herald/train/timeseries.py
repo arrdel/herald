@@ -178,6 +178,41 @@ class TokenizedDataset(Dataset):
         return self.tokenizer.encode(window).sample().squeeze(0).cpu()
 
 
+class CachedTokenDataset(Dataset):
+    """Posterior parameters encoded once, resampled on every access.
+
+    :class:`TokenizedDataset` runs the tokenizer per item, which costs one forward pass per window
+    per epoch and dominates the E1.1 sweep -- twelve models across six token dimensions, each
+    re-encoding the same windows thousands of times. Caching the *parameters* rather than a drawn
+    sample keeps the posterior stochastic (the point of encoding on access) while paying the
+    encoder cost exactly once.
+    """
+
+    def __init__(
+        self,
+        base: Dataset,
+        tokenizer: TimeSeriesTokenizer,
+        device: str = "cpu",
+        batch_size: int = 256,
+    ):
+        tokenizer = tokenizer.to(device).eval()
+        loader = DataLoader(base, batch_size=batch_size, shuffle=False, drop_last=False)
+        means, stds = [], []
+        with torch.no_grad():
+            for batch in loader:
+                posterior = tokenizer.encode(batch.to(device))
+                means.append(posterior.mean.cpu())
+                stds.append(posterior.std.cpu())
+        self.mean = torch.cat(means)
+        self.std = torch.cat(stds)
+
+    def __len__(self) -> int:
+        return self.mean.shape[0]
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return self.mean[idx] + self.std[idx] * torch.randn_like(self.std[idx])
+
+
 def tokenizer_loss(model: TimeSeriesTokenizer, batch: torch.Tensor) -> dict[str, torch.Tensor]:
     out = model(batch)
     return {"loss": out["loss"], "recon_loss": out["recon_loss"].detach(), "kl": out["kl"].detach()}

@@ -1,4 +1,5 @@
 from .timeseries import (
+    CachedTokenDataset,
     TokenizedDataset,
     TrainConfig,
     evaluate,
@@ -11,6 +12,7 @@ from .timeseries import (
 )
 
 __all__ = [
+    "CachedTokenDataset",
     "TokenizedDataset",
     "TrainConfig",
     "evaluate",
