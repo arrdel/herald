@@ -61,10 +61,135 @@ Dividing the exponent by 42² flattens both densities toward uniform, driving th
 and acceptance toward certain — regardless of whether draft and target agree. The losslessness
 proof holds for the untempered ratio; **the shipped default is not the object the proof covers.**
 
-This is the single most important observation in the project so far, and it is the motivation
-for E0.3. Two caveats before leaning on it publicly: (a) confirm the temperature is applied at
-acceptance and not only inside a proposal step, by tracing the call path, and (b) run the sweep
-and measure, rather than arguing from the source alone.
+**Caveat (a) resolved, 2026-09-02 — the temperature is applied at the acceptance test.** Traced
+by call path, not inferred: `SpecDecodeRunner.run` (line 190) constructs
+`DistributionProcessor(..., temperature=self.temperature)` and line 200 calls
+`processor.speculative_sample(draft_samples)`; `speculative_sample` (line 62) calls
+`judge_accept`; `judge_accept` (lines 36–37) calls both `x1_pdf_unormalize` and
+`x2_pdf_unormalize`, each of which divides the standardized residual by `self.temperature`. There
+is no proposal-only interpretation available. Caveat (b) still stands — E0.3 must measure.
+
+**New, 2026-09-02 — a second and independent deviation: the accumulated-variance factor.**
+`judge_accept` returns
+
+```python
+p_x * self.fixed_term * self.x1_std.prod(-1) / (q_x * self.x2_std.prod(-1))
+#     ^^^^^^^^^^^^^^^ = exp((x2_log_var - x1_log_var).sum(-1))
+```
+
+The correct ratio of the two final-step Gaussians is `p_unnorm * prod(s1) / (q_unnorm * prod(s2))`.
+The `fixed_term` is an extra multiplicative factor with no place in it.
+
+Despite the name, `x*_log_var` is not the log-variance of the final-step Gaussian. Tracing what
+fills it: `MAR.get_distribution()` returns `diffloss.gen_diffusion.manager`, and in
+`diffusion/gaussian_diffusion.py::p_sample_loop_progressive_with_noise` the manager is populated as
+
+```python
+if i == 0:                                  # final step
+    self.manager.variance = out["vars"]     # = exp(0.5*log_variance) * temperature  -> a STD
+else:                                       # every other step
+    self.manager.log_var += out["log_variance"]   # = 0.5 * log_variance -> log SIGMA, accumulated
+```
+
+So `x*_log_var` is a sum of `log σ` over ~99 intermediate denoising steps and all 16 channels, and
+`x*_std` is the final-step standard deviation (the attribute name says variance; the value is not).
+`fixed_term` is therefore `exp(Σ_steps Σ_channels (log σ₂ − log σ₁))`, a product of roughly 1,584
+per-step-per-channel ratios.
+
+This is **not** inert. `diffusion/__init__.py::create_diffusion` defaults to `learn_sigma=True`
+→ `ModelVarType.LEARNED_RANGE`, and `DiffLoss` builds its network with
+`out_channels = target_channels * 2` precisely so the variance is predicted per token. Draft and
+target are different networks, so their intermediate variance schedules differ and the factor
+drifts away from 1, compounding over ~99 steps.
+
+Reimplemented and decomposed in `herald/verifiers/cspd_exact.py`, with a test showing the factor
+alone changes the accept decision when draft and target are the *same* distribution — the exact
+ratio is 1 at every token, and CSpD's rule still rejects.
+
+**Also new — the shipped rule cannot be evaluated at temperature 1 in its own arithmetic.**
+`judge_accept` composes raw `torch.exp` calls in linear space. At `d=16` the quadratic form is
+routinely large enough that numerator and denominator both underflow float32 to exactly zero,
+giving `0/0`. Any temperature-1 acceptance measured with upstream's own code therefore risks
+reporting a numerical artifact as a dimensional effect. Our E0.3 harness works in log space and
+flags which tokens upstream would have zeroed (`underflows_in_linear_space`).
+
+**Reproducibility note.** `SpecDecodeRunner` is never imported by `main_mar.py`; the only usage in
+the repo is `demo/run_mar.ipynb`. There is no evaluation entry point, FID script, or throughput
+benchmark for the speculative path, so the reported 2.33× cannot be reproduced from the repo
+without writing the harness. The demo's configuration is draft `mar_base`, target `mar_huge`,
+`ratio=0.05` (the class default is 0.15), `num_draft=4`, `cfg=4.0`, `cfg_schedule="constant"`.
+
+#### Block Verification for Speculative Diffusions (arXiv 2606.13426) — **found 2026-09-02, missed by the 2026-08-29 sweep. The most consequential competitor so far.**
+
+The 2026-08-29 sweep did not surface this and should have; it predates the sweep. Read in full, not
+from the abstract. It changes what C1 can claim and how the "free drafter" framing has to be
+positioned, so it is recorded in detail.
+
+**What it is.** Speculative sampling for *diffusion models* (U-Net DDPM and LDM, CIFAR-10 through
+ImageNet-256), speculating over **denoising steps of a whole image** rather than over
+autoregressive tokens. Three contributions: (i) a `Decomposition` residual sampler
+(Proposition 3.1) that reduces exact residual sampling in ℝ^d to a tractable **1-D** problem;
+(ii) block verification adapted from LLMs, maximizing joint acceptance over a draft block;
+(iii) the **Free Drafter**, a training-free self-speculative drafter that reuses scores already
+computed during the parallel verification pass. Reported gains are modest — up to 6.3% over
+existing speculative methods, 1.08×–2.34× over DDPM depending on step count.
+
+**Where it collides with C1, and how much.** Their Eq. 45 gives the per-sample acceptance rate for
+Gaussian sample verification in closed form:
+
+> `Acceptance(k+1) = 2 − 2Φ( ½ · M(m_q, m_p; σ²I) )`, where `M` is the Mahalanobis distance.
+
+and they observe that as `σ → 0` the distance diverges and **acceptance goes to zero**, "independent
+of the form of the drafter."
+
+This is the same formula C1 rests on, and it is now published. Since `M = ‖m_q − m_p‖ / σ`, a
+per-coordinate mean gap δ over dimension d gives `M = δ√d / σ`, so acceptance decays in **both**
+the σ→0 direction they analyze and the d→∞ direction HERALD is about. Honest reading:
+
+- **Weakened.** "Exact acceptance collapses in continuous speculative sampling" is no longer an
+  unpublished observation. C1 cannot be stated as a discovery of the collapse.
+- **Still standing.** They analyze the noise-scale limit, for diffusion-step speculation, in pixel
+  or 64×64×3 latent space. HERALD's claim is the *dimensionality* direction, in **continuous-token
+  autoregressive** models (MAR/D-JEPA, d=16 per token × 256 tokens), where the per-token verifier is
+  a different object entirely. Neither the setting nor the limit is the same.
+- **Untouched, and now the sharper part of C1.** That the only published continuous-token AR method
+  departs from the exact rule in two specific, undocumented ways (temperature 42 and the
+  accumulated-variance factor) is not in this paper or any other. E0.3a stands.
+- **Genuinely useful to us.** Eq. 45 gives a closed-form acceptance curve to plot the E0.3
+  measurement against, at zero GPU cost. A measured curve that tracks the analytic one is a much
+  stronger result than a measured curve alone. Caveat: Eq. 45 assumes draft and target share a
+  covariance `σ²I`, which CSpD's per-token learned variances violate, so it is a reference curve
+  rather than a prediction.
+
+**Where it collides with the drafter story.** "Free Drafter" and HERALD's "the drafter is already
+trained and thrown away" occupy overlapping rhetorical ground, and a reviewer will ask. The
+mechanisms are not the same: theirs reuses the target model's own score from the verification pass
+within a diffusion sampler (self-speculation, no second network); HERALD's is D-JEPA's *feature
+predictor* with the *EMA target encoder* as verifier — two separately trained networks that the
+upstream method discards at inference. Different model family, different objects. The distinction is
+real but must be drawn explicitly rather than assumed.
+
+**Also relevant.** Temperature-as-lenience is **not** novel and we must stop implying it is: their
+Appendix I discusses it directly, citing Leviathan's `lq/p` relaxation and Tran-Thien (2023) on the
+optimal lossy form. What remains specific to CSpD is the *magnitude* (42, undocumented) and the
+separate arithmetic defect.
+
+They also dismiss CSpD's family in passing — the MAR line "relies on rejection sampling with the
+primary model as its proposal, which ends up being computationally inefficient."
+
+**Actions.** Reposition C1 around dimensionality and the continuous-token AR setting, citing Eq. 45
+rather than competing with it. Add their `Decomposition` sampler to the Phase-2 baseline set: it is
+an exact residual sampler and its existence undercuts any argument that exactness is impractical
+*per se*. Re-run the sweep monthly, and treat the 2026-08-29 miss as evidence the query set was too
+narrow — it was scoped to continuous-token AR and missed diffusion-step speculation.
+
+#### Transform-domain verification (E1.2b prerequisite) — provisionally clear, 2026-09-02
+
+Searched for wavelet/DCT/transform-domain statistics used *inside* a speculative acceptance
+criterion. Nothing found: the speculative-diffusion literature aligns denoising trajectories and
+manipulates the residual sampler, and DCT-domain generative modeling exists but for energy
+compaction, not verification. E1.2b appears unoccupied. This was one query set, not an exhaustive
+sweep of the image-quality-assessment literature, so it lowers the risk rather than eliminating it.
 
 ### Speculative sampling, discrete — why none of it transfers
 
@@ -155,3 +280,10 @@ exist in D-JEPA checkpoints.
 | Date | Scope | Outcome |
 | --- | --- | --- |
 | 2026-08-29 | Initial sweep: D-JEPA, CSpD, SPLICE, DLLM-JEPA, JEPA-guidance, discrete spec-decode family, conformal spec-decode | All papers in the source brief verified real. Gap confirmed. CSpD temperature-42 finding recorded. |
+
+**Open, not yet searched.** The 2026-08-29 sweep covered speculative decoding and JEPA generation
+only. It did **not** look for prior work on verifying or accepting in a *transform domain*
+(wavelet / DCT / SSIM-statistic / spectral), which E1.2b now depends on being novel. Search both
+sides — the speculative-decoding literature and the image-quality-assessment and perceptual-metric
+literature, where the idea could plausibly have arrived first under different vocabulary. Do this
+before writing E1.2b code, and record the outcome here whichever way it lands.

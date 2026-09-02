@@ -116,11 +116,14 @@ herald/
 ├── drafters/      predictor-as-drafter, few-step flow drafts
 ├── verifiers/     token-space (CSpD-exact) and semantic-space acceptance rules
 ├── calibration/   conformal risk control, nonconformity scores
-├── models/        adapters onto MAR / D-JEPA checkpoints
-├── metrics/       FID, CMMD, NFE accounting, acceptance-rate instrumentation
+├── models/        adapters onto MAR / D-JEPA checkpoints; time-series tokenizer + MAR
+├── metrics/       FID, CMMD, NFE accounting, acceptance-rate instrumentation,
+│                  paired pixel-domain audit and decoder sensitivity (E0.4 / E0.5)
+├── train/         training harness for the time-series testbed (the only thing that trains)
 └── data/          ImageNet-256 latents, time-series testbeds
 docs/              plan, related work, running experiment log
 baselines/         upstream repos, unmodified (git-ignored)
+checkpoints/       MAR / D-JEPA / KL16 weights (git-ignored)
 experiments/       one directory per run, config + results + notes
 ```
 
