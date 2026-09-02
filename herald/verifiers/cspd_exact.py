@@ -13,15 +13,32 @@ temperature=self.temperature)`` and calls ``speculative_sample`` → ``judge_acc
 ``*_pdf_unormalize``. The temperature is applied *at the acceptance test*, not merely inside a
 proposal step.
 
-**Deviation 2 -- the accumulated variance term.** ``judge_accept`` multiplies the ratio by
-``fixed_term = exp((x2_log_var - x1_log_var).sum(-1))``. Despite the name, ``x*_log_var`` is not the
-log-variance of the final-step Gaussian. ``gaussian_diffusion.py`` accumulates
-``manager.log_var += 0.5 * out["log_variance"]`` over *every denoising step except the last*, so it
-is a sum of ``log σ`` across ~99 timesteps and all 16 channels. Nothing in the density ratio of the
-two final-step Gaussians calls for that factor. It is inert only if draft and target predict
-identical variances at every intermediate step; they do not, because ``create_diffusion`` is built
-with ``learn_sigma=True`` (``ModelVarType.LEARNED_RANGE``), so the per-token variance is a model
-output and differs between the two networks.
+**Deviation 2 -- the accumulated variance term, applied inverted.** ``judge_accept`` multiplies the
+ratio by ``fixed_term = exp((x2_log_var - x1_log_var).sum(-1))``. Despite the name, ``x*_log_var``
+is not the log-variance of the final-step Gaussian: ``gaussian_diffusion.py`` returns
+``"log_variance": 0.5 * out["log_variance"]`` and accumulates it over *every denoising step except
+the last*, so the stored quantity is a sum of ``log σ`` across ~99 timesteps and all 16 channels,
+and ``fixed_term`` is ``∏_t (σ_p,t / σ_q,t)``.
+
+A factor of this shape **does belong** in the rule. CSpD shares one noise draw between the two
+models, so what is really being verified is the whole denoising trajectory, not the final-step
+Gaussian alone; the trajectory likelihood ratio is ``∏_t p(x_{t-1}|x_t) / q(x_{t-1}|x_t)``, and each
+Gaussian transition contributes a normalizer ``(|Σ_q,t| / |Σ_p,t|)^{1/2} = ∏_c σ_q,t,c / σ_p,t,c``.
+The correct accumulated factor is therefore ``∏_t (σ_q,t / σ_p,t)`` -- **the reciprocal of what CSpD
+applies**. (Fast-ARDiff, arXiv 2512.08537 §S3, derives the same factor independently and states it
+in this direction.)
+
+Two things make this read as a sign slip rather than a modelling choice. First, the *same*
+normalizer for the final step appears in the *same* expression with the correct orientation:
+``judge_accept`` multiplies by ``x1_std.prod(-1) / x2_std.prod(-1)``, i.e. ``σ_q,1 / σ_p,1``.
+Second, the subtraction ``x2_log_var - x1_log_var`` is target-minus-draft where every other scale
+term in the expression is draft-over-target. The resulting acceptance ratio is off by
+``fixed_term²``, since the shipped factor is the inverse of the intended one.
+
+The error is live rather than cosmetic only because draft and target predict *different* variances:
+``create_diffusion`` is built with ``learn_sigma=True`` (``ModelVarType.LEARNED_RANGE``), so the
+per-step variance is a model output. If the two networks agreed at every step the factor would be 1
+under either orientation.
 
 Everything here is computed in log space. CSpD evaluates the ratio as a product of raw
 ``torch.exp`` calls, which underflows to zero at ``d=16`` for even moderately separated Gaussians --
@@ -47,8 +64,8 @@ class TokenGaussian:
         std: ``(N, d)`` final-step standard deviation (``manager.variance`` -- the name is
             misleading upstream; the value is ``exp(0.5 * log_variance) * sampling_temperature``).
         log_sigma_accum: ``(N, d)`` sum of ``log σ`` over all *intermediate* denoising steps
-            (``manager.log_var``). Feeds CSpD's ``fixed_term`` and appears nowhere in the correct
-            density ratio.
+            (``manager.log_var``). Feeds CSpD's ``fixed_term``. It belongs in a trajectory-level
+            ratio, but with the opposite sign to the one CSpD uses -- see the module docstring.
     """
 
     mean: torch.Tensor
@@ -73,12 +90,19 @@ def cspd_log_ratio(
     target: TokenGaussian,
     temperature: float = 42.0,
     include_fixed_term: bool = True,
+    fixed_term_sign: float = 1.0,
 ) -> torch.Tensor:
     """CSpD's ``judge_accept``, in log space.
 
     Setting ``temperature=1.0`` and ``include_fixed_term=False`` recovers :func:`exact_log_ratio`
     exactly, which is the identity the tests pin. The two flags therefore isolate one deviation
     each, and toggling them decomposes the acceptance gap.
+
+    Args:
+        fixed_term_sign: ``+1`` reproduces CSpD as shipped, ``∏_t (σ_p,t / σ_q,t)``. ``-1`` gives the
+            orientation the trajectory likelihood ratio actually calls for, ``∏_t (σ_q,t / σ_p,t)``.
+            Exposed rather than hard-coded because the difference between the two *is* the defect,
+            and a claim about it should be measurable rather than asserted.
     """
     quad_p = (((x - target.mean) / (target.std * temperature)) ** 2).sum(-1)
     quad_q = (((x - draft.mean) / (draft.std * temperature)) ** 2).sum(-1)
@@ -89,7 +113,8 @@ def cspd_log_ratio(
     if include_fixed_term:
         if draft.log_sigma_accum is None or target.log_sigma_accum is None:
             raise ValueError("include_fixed_term=True requires log_sigma_accum on both distributions")
-        log_ratio = log_ratio + (target.log_sigma_accum - draft.log_sigma_accum).sum(-1)
+        accum = (target.log_sigma_accum - draft.log_sigma_accum).sum(-1)
+        log_ratio = log_ratio + fixed_term_sign * accum
     return log_ratio
 
 
@@ -109,29 +134,37 @@ def decompose_acceptance(
     Returns mean acceptance probability under four rules:
 
     ``exact``
-        The lossless ratio. What speculative decoding's guarantee is stated about.
-    ``fixed_term_only``
-        Temperature 1, accumulated-variance factor left in. Isolates deviation 2.
+        The lossless ratio for the two final-step Gaussians.
     ``temperature_only``
-        Temperature as shipped, factor removed. Isolates deviation 1.
+        Temperature as shipped, accumulated factor removed. Isolates deviation 1.
+    ``fixed_term_only``
+        Temperature 1, accumulated factor left in as shipped. Isolates deviation 2.
     ``as_shipped``
         Both. What CSpD actually runs.
+    ``corrected_trajectory``
+        Temperature 1 with the accumulated factor in the orientation the trajectory ratio calls
+        for. This is the honest reference for deviation 2: the question is not whether the factor
+        belongs but whether it is applied the right way round, so ``fixed_term_only`` versus this
+        is the size of the sign error, while this versus ``exact`` is the (legitimate) difference
+        between verifying the trajectory and verifying only the last step.
 
-    The gap between ``exact`` and ``as_shipped`` is the whole of claim C1; the split between the two
-    middle rows says which defect is doing the work, which nobody has reported.
+    The gap between ``exact`` and ``as_shipped`` is the whole of claim C1; the splits between the
+    middle rows say which defect is doing the work, which nobody has reported.
     """
     has_accum = draft.log_sigma_accum is not None and target.log_sigma_accum is not None
     rules = {
-        "exact": (1.0, False),
-        "temperature_only": (temperature, False),
+        "exact": (1.0, False, 1.0),
+        "temperature_only": (temperature, False, 1.0),
     }
     if has_accum:
-        rules["fixed_term_only"] = (1.0, True)
-        rules["as_shipped"] = (temperature, True)
+        rules["fixed_term_only"] = (1.0, True, 1.0)
+        rules["as_shipped"] = (temperature, True, 1.0)
+        rules["corrected_trajectory"] = (1.0, True, -1.0)
 
     out = {}
-    for name, (temp, fixed) in rules.items():
-        lr = cspd_log_ratio(x, draft, target, temperature=temp, include_fixed_term=fixed)
+    for name, (temp, fixed, sign) in rules.items():
+        lr = cspd_log_ratio(x, draft, target, temperature=temp, include_fixed_term=fixed,
+                            fixed_term_sign=sign)
         out[name] = acceptance_from_log_ratio(lr).mean().item()
     return out
 
@@ -169,6 +202,10 @@ def fixed_term_magnitude(
     frac_gap: float = 0.05,
 ) -> dict:
     """How large CSpD's accumulated-variance factor can get, from the schedule alone.
+
+    The returned exponents bound ``|Σ_t Σ_c (log σ_p - log σ_q)|``, i.e. ``|log fixed_term|``. Since
+    the shipped factor is the *inverse* of the one the trajectory ratio calls for, the acceptance
+    ratio is wrong by ``fixed_term²`` and the error exponent is **twice** the numbers below.
 
     Under ``ModelVarType.LEARNED_RANGE`` the network emits an interpolation fraction in ``[0, 1]``
     and the step's log-variance is ``frac * log β + (1 - frac) * posterior_log_variance_clipped``.

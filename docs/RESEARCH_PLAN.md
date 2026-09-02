@@ -147,16 +147,24 @@ Nothing gets built until the baselines run and the diagnostic lands.
   nothing to reproduce from. `SpecDecodeRunner` is never imported by `main_mar.py`; its only use in
   the repo is `demo/run_mar.ipynb`, and the repo ships no FID script or throughput benchmark for
   the speculative path. The harness has to be written before the number can be checked at all.
-- **E0.3a** **Done (2026-09-02), no GPU.** Bound CSpD's spurious accumulated-variance factor from
-  its diffusion schedule alone. Found a *second* departure from the exact acceptance rule,
-  independent of the temperature and undocumented: `judge_accept` multiplies the ratio by
-  `exp(Σ_steps Σ_channels (log σ₂ − log σ₁))`, a product of 1,584 terms bounded at e^81. A 5%
-  disagreement between draft and target on predicted variance suffices for ~57×, where 2× would
-  already saturate `min(1, ratio)`. See the log entry and `herald/verifiers/cspd_exact.py`.
+- **E0.3a** **Done (2026-09-02), no GPU. Corrected the same day — see the log.** Bound CSpD's
+  accumulated-variance factor from its diffusion schedule alone. Found a *second* departure from the
+  exact acceptance rule, independent of the temperature and undocumented: `judge_accept` multiplies
+  the ratio by `exp(Σ_steps Σ_channels (log σ₂ − log σ₁))`, a product of 1,584 terms bounded at e^81.
+
+  **The correction:** the factor is *not* spurious. CSpD shares one noise draw, so it verifies a
+  trajectory, and each Gaussian transition legitimately contributes `(|Σ_q,t|/|Σ_p,t|)^{1/2}`
+  (Fast-ARDiff arXiv 2512.08537 §S3 derives the same). The defect is that CSpD applies the
+  **reciprocal**, so the ratio is wrong by `fixed_term²` and the error exponents double (worst case
+  161.5; the assumed-5%-gap case becomes ~3,200× rather than 57×). Weaker claim, far more defensible,
+  and it now has an independent witness in Fast-ARDiff. Only a 5% disagreement between draft and
+  target on predicted variance is needed, where 2× would already saturate `min(1, ratio)`. See the
+  log entry and `herald/verifiers/cspd_exact.py`.
 - **E0.3** **The critical experiment.** Sweep `inner_temperature ∈ {1, 2, 5, 10, 20, 42}` on real
-  MAR draft/target pairs. Report the four-way decomposition — `exact`, `temperature_only`,
-  `fixed_term_only`, `as_shipped` — so the two defects are attributed separately, plus the measured
-  distribution of the `fixed_term` exponent that E0.3a could only bound.
+  MAR draft/target pairs. Report the **five-way** decomposition — `exact`, `temperature_only`,
+  `fixed_term_only`, `corrected_trajectory`, `as_shipped` — so that the temperature, the *sign
+  error*, and the legitimate trajectory term are attributed separately rather than lumped together,
+  plus the measured distribution of the `fixed_term` exponent that E0.3a could only bound.
 
   *Design, revised for a GPU budget.* The temperature enters only at `judge_accept`, after both
   models' distributions are fixed (verified by call path). So one generation run can record every

@@ -144,6 +144,12 @@ run). Both are now in token evaluations, which is what produced the 0.22 above.
 
 ## 2026-09-02 — E0.3a — CSpD's acceptance rule has a *second* defect, independent of the temperature, and the schedule alone bounds it at e^81
 
+> **Partly superseded the same day — see "E0.3a (corrected)" below.** The characterisation of the
+> second defect in this entry is wrong: the accumulated-variance factor *does* belong in the rule
+> (CSpD shares one noise draw, so it verifies a trajectory), and the actual defect is that CSpD
+> applies its **reciprocal**. The magnitudes below are unaffected; the error exponent doubles.
+> Left unedited because a log that quietly rewrites its own mistakes is not a log.
+
 **Ran:** `python scripts/analyze_cspd_fixed_term.py`. Zero GPU, zero model weights — the result
 follows from CSpD's diffusion schedule and its own source. Raw numbers in
 `experiments/E0.3a-fixed-term/results.json`. Source reading recorded in `docs/RELATED_WORK.md`;
@@ -452,6 +458,75 @@ The trend is robust to that; individual cells are not.
 **Changes:** `measure_acceptance` moved into `herald/eval/` so E1.1, E1.1b, and the E1.2/E1.3 ladder
 cannot drift apart, with the RNG fix and six tests. `TrainConfig.checkpoint_every` added. No change
 to the method or to C1's statement.
+
+---
+
+## 2026-09-02 — E0.3a (corrected) — the accumulated-variance factor *belongs*; CSpD applies its reciprocal. Weaker claim, stronger position.
+
+**Trigger.** A scoop-check sweep of the transform-domain verification literature (run to clear
+E1.2b) turned up **Fast-ARDiff** (arXiv 2512.08537), which builds on CSpD and whose §S3 states the
+continuous acceptance ratio as `p/q = Σ · p_θ(x₀|x₁ᵖ)/q_θ(x₀|x₁ᵍ)` with
+`Σ = ∏_{t≥2} √(|Σ_q,t| / |Σ_p,t|)`, applying it in Algorithm 1 as part of the *correct* criterion.
+That is an independent group endorsing the factor E0.3a called spurious. Both readings cannot be
+right, so I settled it against the source rather than against search results.
+
+**Ran:** no compute. Re-read `spec_decode_runner.py` and `gaussian_diffusion.py`, and derived the
+trajectory ratio. New tests in `tests/test_cspd_exact.py` pin the result (77 tests pass).
+
+**Result — Fast-ARDiff is right about the factor, and we were wrong.** CSpD draws `noise` and
+`inter_noise` **once** and shares them between draft and target (`run()`, lines 101–103 — the same
+fact E0.4's prerequisite rests on). What is being verified is therefore the whole denoising
+trajectory, whose likelihood ratio is `∏_t p(x_{t-1}|x_t) / q(x_{t-1}|x_t)`. Each Gaussian
+transition contributes a normalizer `(|Σ_q,t|/|Σ_p,t|)^{1/2} = ∏_c σ_q,t,c / σ_p,t,c`. A factor of
+this shape belongs. E0.3a's "nothing calls for that factor" was simply wrong.
+
+**But the defect is real, and now sharper: CSpD applies the factor upside down.**
+
+| | accumulated factor |
+| --- | --- |
+| correct (trajectory ratio) | `∏_t (σ_q,t / σ_p,t)` |
+| CSpD, `exp((x2_log_var − x1_log_var).sum(-1))` with x1=draft=q, x2=target=p | `∏_t (σ_p,t / σ_q,t)` |
+
+The shipped factor is the reciprocal of the intended one, so **the acceptance ratio is wrong by
+`fixed_term²`** and every error exponent in the original entry doubles: worst case 80.8 → **161.5**
+(e^161), and the assumed-5%-gap case 4.04 → **8.08**, a ~3,200× error rather than 57×.
+
+Two details make this a sign slip rather than a modelling choice, both visible in the one line:
+the *same* normalizer for the final step appears in the *same* expression the right way round
+(`x1_std.prod(-1) / x2_std.prod(-1)`, i.e. `σ_q,1/σ_p,1`), and the accumulated subtraction is
+target-minus-draft where every other scale term is draft-over-target. Note also that
+`gaussian_diffusion.py` line 582 returns `"log_variance": 0.5 * out["log_variance"]` — so the
+accumulator holds `Σ log σ`, not `Σ log σ²`, which is why the power comes out right even though the
+direction does not.
+
+**Reading.** This is a weaker claim than the one it replaces and a much stronger position to defend.
+"Upstream added a term with no place in the ratio" invites a one-line rebuttal from anyone holding
+the Fast-ARDiff derivation; "upstream's term is correct in form and inverted in sign, and here is
+the code, the derivation, and a test" does not. It also means the C1 story now has an independent
+witness: Fast-ARDiff derives the criterion CSpD *should* implement, which makes the gap between
+them a documented discrepancy rather than our interpretation. **This is exactly the failure mode the
+project's own rule about reading source rather than abstracts is meant to catch — the trap here was
+that we did read the source, but reconstructed the intended derivation from the final-step
+Gaussians alone rather than from the shared-noise trajectory the code actually implements.**
+
+**Caveats.** Fast-ARDiff's §S3 is a secondary source for CSpD's intent; the derivation above is
+mine and does not depend on it, but I have not found the corresponding statement in the CSpD paper
+itself. The bound remains a bound: 161.5 assumes both models pin their variance fractions to
+opposite ends of the range at every step and channel. The factor is signed, so the inversion can
+deflate acceptance as easily as inflate it, and the direction for a real MAR-B/MAR-H pair is still
+unknown — that is E0.3's job.
+
+**Changes:**
+- `cspd_log_ratio` gains `fixed_term_sign`; `decompose_acceptance` gains a
+  **`corrected_trajectory`** rule, so E0.3 will separate the sign error from the legitimate
+  trajectory term instead of lumping them together. E0.3's deliverable is now a five-way
+  decomposition.
+- `fixed_term_magnitude` documents that the error exponent is twice the returned value.
+- `RELATED_WORK.md`: E0.3a note corrected; **Fast-ARDiff added as a first-order competitor** —
+  4.38×–4.88× on ImageNet 256 with FID preserved (MAR-H 4.47× at FID 1.61) is the frontier C3 must
+  beat, in exactly our setting.
+- C1's second half is restated: the only published continuous-token AR method departs from the exact
+  rule in two undocumented ways — temperature 42, and an **inverted** trajectory normalizer.
 
 ---
 

@@ -90,21 +90,62 @@ def test_fixed_term_shifts_acceptance_even_when_models_agree():
     assert with_fixed == pytest.approx(math.exp(-0.16), rel=1e-3)
 
 
+def test_shipped_fixed_term_is_the_reciprocal_of_the_trajectory_factor():
+    """Deviation 2, stated precisely: the factor belongs, but CSpD applies it upside down.
+
+    Sharing one noise draw between the two models means the object being verified is the whole
+    denoising trajectory, whose likelihood ratio picks up ``(|Sigma_q,t|/|Sigma_p,t|)^(1/2)`` per
+    Gaussian transition -- i.e. ``prod_t sigma_q,t / sigma_p,t``. CSpD applies
+    ``prod_t sigma_p,t / sigma_q,t``. The two log-ratios must therefore straddle the trajectory-free
+    ratio symmetrically, which is what this pins.
+    """
+    x, draft, target = _pair(d=16, n=256, shift=0.3, accum=(0.0, -0.01))
+
+    shipped = cspd_log_ratio(x, draft, target, temperature=1.0, include_fixed_term=True)
+    corrected = cspd_log_ratio(x, draft, target, temperature=1.0, include_fixed_term=True,
+                               fixed_term_sign=-1.0)
+    without = cspd_log_ratio(x, draft, target, temperature=1.0, include_fixed_term=False)
+
+    torch.testing.assert_close(shipped - without, without - corrected)
+    # The acceptance ratio is wrong by fixed_term squared.
+    torch.testing.assert_close(shipped - corrected, 2.0 * (shipped - without))
+
+
+def test_the_two_orientations_agree_only_when_the_models_share_a_variance_schedule():
+    """Why the sign error is live: it vanishes exactly when LEARNED_RANGE makes it impossible."""
+    x, draft, target = _pair(d=16, n=128, shift=0.3, accum=(0.0, 0.0))
+    shipped = cspd_log_ratio(x, draft, target, temperature=1.0, include_fixed_term=True)
+    corrected = cspd_log_ratio(x, draft, target, temperature=1.0, include_fixed_term=True,
+                               fixed_term_sign=-1.0)
+    torch.testing.assert_close(shipped, corrected)
+
+
 def test_fixed_term_requires_the_accumulator():
     x, draft, target = _pair()
     with pytest.raises(ValueError, match="log_sigma_accum"):
         cspd_log_ratio(x, draft, target, temperature=42.0, include_fixed_term=True)
 
 
-def test_decomposition_reports_all_four_rules_and_orders_them_sensibly():
+def test_decomposition_reports_every_rule_and_orders_them_sensibly():
     x, draft, target = _pair(shift=0.5, accum=(0.0, 0.0))
     out = decompose_acceptance(x, draft, target, temperature=42.0)
 
-    assert set(out) == {"exact", "temperature_only", "fixed_term_only", "as_shipped"}
-    # With matched accumulators the fixed term is inert, so these pairs must coincide.
+    assert set(out) == {"exact", "temperature_only", "fixed_term_only", "as_shipped",
+                        "corrected_trajectory"}
+    # With matched accumulators the fixed term is inert under either orientation.
     assert out["fixed_term_only"] == pytest.approx(out["exact"], rel=1e-5)
+    assert out["corrected_trajectory"] == pytest.approx(out["exact"], rel=1e-5)
     assert out["as_shipped"] == pytest.approx(out["temperature_only"], rel=1e-5)
     assert out["as_shipped"] > out["exact"]
+
+
+def test_decomposition_separates_the_sign_error_from_the_trajectory_term():
+    """With mismatched schedules the two orientations must straddle the last-step-only rule."""
+    x, draft, target = _pair(shift=0.5, accum=(0.0, -0.02))
+    out = decompose_acceptance(x, draft, target, temperature=42.0)
+    assert out["fixed_term_only"] != pytest.approx(out["corrected_trajectory"], rel=1e-3)
+    lo, hi = sorted([out["fixed_term_only"], out["corrected_trajectory"]])
+    assert lo < out["exact"] < hi
 
 
 def test_decomposition_degrades_gracefully_without_accumulators():

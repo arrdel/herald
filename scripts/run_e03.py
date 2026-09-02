@@ -134,11 +134,19 @@ def do_analyze(args) -> None:
     # The factor CSpD injects, measured rather than assumed.
     fixed_exponent = (target.log_sigma_accum - draft.log_sigma_accum).sum(-1)
 
+    # Three orientations, not two. The accumulated factor is a legitimate part of the trajectory
+    # likelihood ratio; CSpD's defect is that it applies the reciprocal. Reporting only
+    # "with/without" would charge the whole difference to a term that half belongs.
     rows = []
     for temp in TEMPERATURES:
         row = {"temperature": temp}
-        for name, fixed in (("no_fixed_term", False), ("as_shipped", True)):
-            lr = cspd_log_ratio(x, draft, target, temperature=temp, include_fixed_term=fixed)
+        for name, fixed, sign in (
+            ("no_fixed_term", False, 1.0),
+            ("corrected_trajectory", True, -1.0),
+            ("as_shipped", True, 1.0),
+        ):
+            lr = cspd_log_ratio(x, draft, target, temperature=temp,
+                                include_fixed_term=fixed, fixed_term_sign=sign)
             row[name] = acceptance_from_log_ratio(lr).mean().item()
         rows.append(row)
 
@@ -162,9 +170,10 @@ def do_analyze(args) -> None:
     fe = result["measured_fixed_term_exponent"]
     print(f"measured fixed_term exponent      : mean {fe['mean']:+.3f}  "
           f"|median| {fe['abs_median']:.3f}  |p95| {fe['abs_p95']:.3f}  |max| {fe['max_abs']:.3f}")
-    print(f"\n{'T':>6} {'no fixed_term':>15} {'as shipped':>12}")
+    print(f"\n{'T':>6} {'no fixed_term':>15} {'corrected':>12} {'as shipped':>12}")
     for row in rows:
-        print(f"{row['temperature']:>6.0f} {row['no_fixed_term']:>15.4f} {row['as_shipped']:>12.4f}")
+        print(f"{row['temperature']:>6.0f} {row['no_fixed_term']:>15.4f} "
+              f"{row['corrected_trajectory']:>12.4f} {row['as_shipped']:>12.4f}")
 
     out = Path(args.out) / "results.json"
     out.parent.mkdir(parents=True, exist_ok=True)

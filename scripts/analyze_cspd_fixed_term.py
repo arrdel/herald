@@ -1,10 +1,15 @@
 #!/usr/bin/env python
-"""E0.3a -- bound CSpD's spurious ``fixed_term`` from its diffusion schedule alone. No GPU, no model.
+"""E0.3a -- bound CSpD's ``fixed_term`` from its diffusion schedule alone. No GPU, no model.
 
 ``DistributionProcessor.judge_accept`` multiplies the density ratio by
 ``exp((x2_log_var - x1_log_var).sum(-1))``, where each ``log_var`` is a sum of ``log σ`` over every
-intermediate denoising step. This factor does not belong in the ratio of the two final-step
-Gaussians (see ``docs/RELATED_WORK.md``).
+intermediate denoising step, giving ``∏_t (σ_p,t / σ_q,t)``.
+
+A factor of this shape **belongs**: CSpD shares one noise draw between the models, so it verifies a
+trajectory, and each Gaussian transition contributes ``(|Σ_q,t| / |Σ_p,t|)^{1/2}``. The defect is
+that CSpD applies the **reciprocal** of that, so the acceptance ratio is wrong by ``fixed_term²``
+and the error exponent is **twice** the magnitudes reported here (see ``docs/RELATED_WORK.md`` and
+the "E0.3a (corrected)" log entry).
 
 How much damage it does depends on how far apart the draft's and target's predicted ``log σ`` can
 be at each step, and that range is fixed by the schedule, not by the weights: under

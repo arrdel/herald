@@ -78,7 +78,30 @@ p_x * self.fixed_term * self.x1_std.prod(-1) / (q_x * self.x2_std.prod(-1))
 ```
 
 The correct ratio of the two final-step Gaussians is `p_unnorm * prod(s1) / (q_unnorm * prod(s2))`.
-The `fixed_term` is an extra multiplicative factor with no place in it.
+The `fixed_term` is an extra multiplicative factor on top of it.
+
+**Corrected 2026-09-02 (second pass).** An earlier version of this note said the factor "has no
+place in it." That was too strong, and the correction matters because it is the difference between a
+claim a reviewer can dismiss and one they cannot. CSpD draws `noise` and `inter_noise` **once** and
+shares them between the two models, so the object being verified is the whole denoising trajectory,
+not the final-step Gaussian in isolation. The trajectory likelihood ratio is
+`∏_t p(x_{t-1}|x_t) / q(x_{t-1}|x_t)`, and each Gaussian transition contributes a normalizer
+`(|Σ_q,t| / |Σ_p,t|)^{1/2} = ∏_c σ_q,t,c / σ_p,t,c`. **A factor of this shape belongs.**
+Fast-ARDiff (arXiv 2512.08537, §S3) derives it independently and states it in exactly this
+direction, so anyone who has read that paper will have seen the factor endorsed.
+
+**The defect is that CSpD applies it inverted.** The correct accumulated factor is
+`∏_t (σ_q,t / σ_p,t)`; `fixed_term = exp((x2_log_var − x1_log_var).sum(-1))` with `x1 = q` (draft)
+and `x2 = p` (target) is `∏_t (σ_p,t / σ_q,t)`, the reciprocal. The acceptance ratio is therefore
+wrong by `fixed_term²`.
+
+Two things make this a sign slip rather than a modelling choice, and both are visible in the single
+line above. The *same* normalizer for the final step sits in the *same* expression the right way
+round — `x1_std.prod(-1) / x2_std.prod(-1)`, i.e. `σ_q,1 / σ_p,1`. And the accumulated subtraction
+is target-minus-draft where every other scale term in the expression is draft-over-target.
+Pinned by tests in `tests/test_cspd_exact.py`; `cspd_log_ratio(..., fixed_term_sign=-1)` gives the
+correct orientation, and `decompose_acceptance` now reports it as `corrected_trajectory` so the
+sign error is separated from the legitimate trajectory term.
 
 Despite the name, `x*_log_var` is not the log-variance of the final-step Gaussian. Tracing what
 fills it: `MAR.get_distribution()` returns `diffloss.gen_diffusion.manager`, and in
@@ -153,8 +176,9 @@ the σ→0 direction they analyze and the d→∞ direction HERALD is about. Hon
   autoregressive** models (MAR/D-JEPA, d=16 per token × 256 tokens), where the per-token verifier is
   a different object entirely. Neither the setting nor the limit is the same.
 - **Untouched, and now the sharper part of C1.** That the only published continuous-token AR method
-  departs from the exact rule in two specific, undocumented ways (temperature 42 and the
-  accumulated-variance factor) is not in this paper or any other. E0.3a stands.
+  departs from the exact rule in two specific, undocumented ways (temperature 42 and the *inverted*
+  accumulated-variance factor) is not in this paper or any other. E0.3a stands, in its corrected
+  form.
 - **Genuinely useful to us.** Eq. 45 gives a closed-form acceptance curve to plot the E0.3
   measurement against, at zero GPU cost. A measured curve that tracks the analytic one is a much
   stronger result than a measured curve alone. Caveat: Eq. 45 assumes draft and target share a
@@ -183,13 +207,75 @@ an exact residual sampler and its existence undercuts any argument that exactnes
 *per se*. Re-run the sweep monthly, and treat the 2026-08-29 miss as evidence the query set was too
 narrow — it was scoped to continuous-token AR and missed diffusion-step speculation.
 
-#### Transform-domain verification (E1.2b prerequisite) — provisionally clear, 2026-09-02
+#### Fast-ARDiff (arXiv 2512.08537) — **found 2026-09-02. A first-order competitor in exactly our setting, and it bears on E0.3a.**
 
-Searched for wavelet/DCT/transform-domain statistics used *inside* a speculative acceptance
-criterion. Nothing found: the speculative-diffusion literature aligns denoising trajectories and
-manipulates the residual sampler, and DCT-domain generative modeling exists but for energy
-compaction, not verification. E1.2b appears unoccupied. This was one query set, not an exhaustive
-sweep of the image-quality-assessment literature, so it lowers the risk rather than eliminating it.
+Zou, Ma, Huang, Yu, Zhao (USTC; JD). Builds directly on CSpD for MAR, TransDiff and NextStep-1. Two
+mechanisms: a training-time loss forcing the draft's attention-map entropy to match the target's
+(reported to cut the rejection rate by >40%), and an inference-time rule that stops speculating when
+shallow-layer attention entropy falls below a calibrated threshold. With two-stage diffusion
+distillation: **4.38×–4.88× on ImageNet 256 with FID essentially preserved** (MAR-L 1.78 → 1.77 at
+4.38×; MAR-H 4.47× at FID 1.61).
+
+- **This is the number C3 has to beat**, and it reports FID alongside speedup as we demand of
+  ourselves. It is the strongest published speed/quality frontier in the continuous-token AR
+  setting.
+- **It also endorses CSpD's accumulated-variance factor.** Its §S3 states the acceptance ratio with
+  `Σ = ∏_{t≥2} √(|Σ_q,t| / |Σ_p,t|)` and Algorithm 1 applies it in both the acceptance test and the
+  residual sampler. This forced a correction to our E0.3a claim: the factor *belongs* (it is the
+  trajectory normalizer), and CSpD's defect is that it applies the **reciprocal**. See the corrected
+  note above. A reviewer who has read Fast-ARDiff would otherwise have caught this.
+- **Not a threat to E1.2b.** Its gating statistic is a scalar attention entropy deciding *whether to
+  speculate*, not a statistic being *verified*. No transform domain, no guarantee.
+
+#### Transform-domain verification (E1.2b prerequisite) — clear in the literal form, but not an all-clear. Re-swept 2026-09-02 (18 queries).
+
+E1.2b's specific construction — verifying a wavelet subband energy, DCT statistic, SSIM local-moment
+triple, steerable-pyramid statistic or spectral band of a *continuous* token as the accept/reject
+test in a draft-and-verify loop — remains unoccupied. Nothing found on either the speculative-
+decoding side or the image-quality-assessment side. **Build it.** Three qualifications, each of
+which changes how it must be written up rather than whether to run it:
+
+- **The coarse-grained-verification construction is published, repeatedly, in discrete spaces, and
+  we cannot claim it.** **PCG** (arXiv 2511.13732) defines a coarse random variable over acoustic
+  similarity groups, splits probability mass across overlapping groups, runs rejection sampling on
+  the *group label*, and proves exactness at the coarse level — structurally the theorem HERALD
+  wants, and its related-work section explicitly claims the general move. **LANTERN**
+  (arXiv 2410.03355, ICLR 2025) and **LANTERN++** (2502.06352) aggregate target mass over latent
+  neighbours under a TV bound, and report untempered visual-AR acceptance at **0.0402** — useful
+  external corroboration of the collapse premise. **Grouped Speculative Decoding** (ICCV 2025)
+  proves clustering reduces TV and so raises acceptance. **CASCADE** (2605.07230) defines the
+  equivalence class in the *verifier's* feature space. Our claim is the continuous-space
+  instantiation: the coarsening is a dimension-reducing map rather than a partition of a finite
+  vocabulary, so the aggregation is an intractable integral rather than a sum, and the
+  acceptance-vs-dimension scaling has no analogue in a codebook. State that difference explicitly.
+- **Transform-domain statistics already drive in-loop shortcut decisions.** **FreqCa**
+  (2510.08669), **SpectralCache** (2603.05315) and **SeaCache** (2602.18993) decompose diffusion
+  features by frequency and use per-band criteria to decide cache-or-recompute. No drafter, no
+  verifier, no guarantee — the decision is a deterministic threshold on a heuristic. But "frequency
+  bands of the representation tell you when computation can be shortcut" is established prior, not
+  our insight. Our contribution is the *guarantee*, not the observation.
+- **Cite ABC for the motivating logic.** Fearnhead & Prangle (JRSS-B 2012) prove ABC acceptance
+  scales as `h^d` in the dimension of the matched statistic, and the field's twenty-year answer is
+  to accept on a low-dimensional near-sufficient summary instead. No scoop — nothing to do with
+  speculative decoding — but the *idea* "acceptance collapses with dimension, so accept on a
+  summary" is not new as statistics, and a well-read reviewer will say so. It also predicts E1.2a:
+  a random projection reduces `d` and therefore *must* raise acceptance, which is precisely why the
+  null control exists and why E1.2b's bar is "beats a random projection at matched `k`".
+
+Also surfaced: **SemanticSpec** (arXiv 2602.03708) runs the acceptance decision on learned semantic
+probabilities from draft and target hidden states — verify-in-semantic-space with a learned
+projection, i.e. **E1.3's idea in the text modality**. Logged here as a threat to E1.3's framing,
+not E1.2b's. **COOL-SD** (2601.09212, AAAI 2026) and **Cactus** (2604.04987) give the general
+relaxed-acceptance efficiency-vs-TV frontier our frontier plot will be compared against.
+**MuLo-SD** (CVPR 2026, 2601.05149) is multi-scale in the *drafter*, not the verifier.
+**Portilla & Simoncelli** (IJCV 2000) is the ancestor of E1.2b's premise — that a modest set of
+subband statistics defines a perceptual equivalence class — and should be cited as the reason for
+choosing *those* statistics, which pre-empts "why these 16 numbers and not any other 16".
+
+*Coverage.* Web search only, no Scholar/Semantic Scholar/arXiv full-text. Two papers read in full
+(PCG, Fast-ARDiff); the rest from abstracts plus retrieved method excerpts, so those verdicts are
+**provisional** under our own read-the-source rule. Read GSD and CASCADE in full before writing
+E1.2b. PCG's author list and venue could not be verified.
 
 ### Speculative sampling, discrete — why none of it transfers
 
