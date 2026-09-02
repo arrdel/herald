@@ -8,6 +8,7 @@ from .cspd_exact import (
     fixed_term_magnitude,
     underflows_in_linear_space,
 )
+from .projected import project_mixture, projected_log_ratio, random_projection
 from .token_space import (
     TokenSpaceVerifier,
     diagonal_gaussian_logpdf,
@@ -25,5 +26,8 @@ __all__ = [
     "effective_dimension_penalty",
     "exact_log_ratio",
     "fixed_term_magnitude",
+    "project_mixture",
+    "projected_log_ratio",
+    "random_projection",
     "underflows_in_linear_space",
 ]

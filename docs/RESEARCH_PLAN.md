@@ -262,8 +262,21 @@ statistic has had to survive the cheaper explanations first.
   *Also.* `measure_acceptance` was found to be drawing x from global RNG, so its `seed` argument was
   not doing what it claimed. Fixed; E1.1 re-measured under the corrected sampler moved within a few
   SEM (the 170× collapse reads 181×). The estimator now lives in `herald/eval/` under test.
-- **E1.2a** Same sweep, verifying a random *k*-dim projection. The null control: isolates "low
-  dimension helps" from "*this* projection helps."
+- **E1.2a** **Done 2026-09-02, no GPU** (pure inference on E1.1's checkpoints). Same sweep, verifying
+  a random orthonormal *k*-dim projection, five draws per *k*. Anchored by the `k = d` invariance,
+  which reproduces E1.1 to four decimals.
+
+  **Acceptance is governed by *k* alone.** At `k=4` it is 0.62 for every `d` from 4 to 128 — a 32×
+  range of token dimension moving acceptance by 2.4%. Across `k ∈ {1,2,4,8,16,32}` the coefficient
+  of variation over `d` is 1.3–8.4%. This is the cleanest form of C1's mechanism: the governing
+  variable is the dimension of the space the test lives in, not the token's own dimension.
+
+  **And it makes C2's low-dimensional half free.** A *structureless* projection lifts acceptance
+  from 0.0035 to 0.64 at `d=128` (180×). So "verify something low-dimensional and acceptance comes
+  back" is established, and established by the null control — it is not evidence for anything we
+  propose. **The interesting axis is therefore fidelity at matched `k`, not acceptance at matched
+  `k`**, since at matched `k` every rule sits at roughly the same acceptance. E1.2b and E1.3 must be
+  scored on what they *discard*, and this experiment does not measure that. See the risk table.
 - **E1.2b [IP]** Same sweep, verifying a **transform-domain statistic** — wavelet or
   steerable-pyramid subband energies, DCT coefficient statistics, the local mean/variance/
   covariance triple that SSIM is built from, radially-averaged spectral bands. Structured,
@@ -365,7 +378,9 @@ entire claim is about the second, so a table reporting only the first is not evi
 | **δ turns out to be small** | The new top risk, from §1b. If MAR draft/target agree to within ~0.1σ per coordinate, exact acceptance at d=16 is ~84%, C1's dimensionality half dies, and CSpD's relaxation looks unnecessary rather than concealing. E0.3 measures δ directly and is cheap; run it before anything depends on the answer. |
 | **Semantic acceptance costs high-frequency detail** | Genuinely likely, and it would damage C3. E0.4 detects it on CSpD before we build anything; E2.5 quantifies it for HERALD. If it fires, try the Jacobian-weighted score from E0.5, and failing that report an explicit semantic-fidelity vs. detail-fidelity tradeoff curve instead of a free speedup. |
 | **Transform-domain control matches JEPA** | Not project-ending. Retarget to the transform rule, which is cheaper, training-free, and interpretable; the acceleration result survives and the "reuse the discarded verifier" narrative does not. Decide this on E1.2b/E2.2b, not on which story reads better. |
-| **Transform-domain verification is already published** | Unverified as of the 2026-08-29 sweep, which did not look for it. Check before building E1.2b — search the image-quality-assessment and perceptual-metric literature as well as speculative decoding, since the idea could arrive from either side. |
+| **Transform-domain verification is already published** | ~~Unverified as of the 2026-08-29 sweep.~~ **Swept 2026-09-02 (18 queries): clear in its literal form — build it.** But the coarse-grained-verification *construction* is owned in discrete spaces (PCG 2511.13732 explicitly claims it; also LANTERN, GSD, CASCADE), frequency-domain statistics already drive in-loop skip decisions (FreqCa, SpectralCache, SeaCache), and ABC has owned "acceptance collapses with dimension, so accept on a summary" since Fearnhead & Prangle 2012. Cite all three as prior; claim only the continuous-space instantiation and the guarantee. Read GSD and CASCADE in full before writing. |
+| **Acceptance gains are free, so C2 is vacuous as worded** | **Fired 2026-09-02 (E1.2a).** A random orthonormal projection recovers acceptance from 0.0035 to 0.64 at d=128, and acceptance depends on the verified dim `k` essentially alone (CoV 1.3–8.4% across a 32× range of `d`). The low-dimensional half of C2 is established *by the null control*. Not project-ending, but it moves the burden: **E1.2b and E1.3 are scored on fidelity at matched `k`, against E1.2a's curve**, never on acceptance and never against raw verification. C2 restated in the README accordingly. |
+| **Fast-ARDiff already owns the frontier** | **New 2026-09-02.** arXiv 2512.08537 reports 4.38×–4.88× on ImageNet 256 with FID preserved (MAR-H 4.47× at FID 1.61), in exactly our setting, building on CSpD. C3's target is now this, not CSpD's 2.33×. It also endorses the accumulated-variance factor, which forced the E0.3a correction. Read it in full before Phase 2. |
 
 ---
 

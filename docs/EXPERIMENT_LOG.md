@@ -530,10 +530,85 @@ unknown — that is E0.3's job.
 
 ---
 
+## 2026-09-02 — E1.2a — acceptance is set by the *verified* dimension `k`, not the token dimension `d`. Six values of `d` collapse onto one curve.
+
+**Ran:** `python scripts/run_e12a.py --dims 4 8 16 32 64 128 --n-projections 5 --eval-batches 40`.
+**No training and no GPU** — this reuses E1.1's saved tokenizers and draft/target pairs and is pure
+inference, 16 min on CPU. For each `d`, verification is applied to `A x` for a random `k × d` matrix
+with orthonormal rows, `k` sweeping powers of two up to `d`, five independent draws of `A` per `k`.
+The draft still proposes the *full* token; only its projection is checked. Machinery in
+`herald/verifiers/projected.py`, results in `experiments/E1.2a-random-projection/`, figure at
+`docs/figures/e12a_random_projection.png`.
+
+**Correctness anchor, passed.** A square orthogonal `A` is a bijection with unit Jacobian, so at
+`k = d` the projected test must reproduce raw verification *exactly*. It does, at every dimension:
+0.6425 / 0.4069 / 0.1743 / 0.0736 / 0.0178 / 0.0035 against E1.1's re-measured values to four
+decimals. Any acceptance gain at `k < d` is therefore the projection discarding disagreement, not an
+error in the pushforward density.
+
+**Result.** Acceptance as a function of `k` (columns are the token dimension; `k = d` cells are the
+no-projection control and are excluded from the summary):
+
+| k | d=4 | d=8 | d=16 | d=32 | d=64 | d=128 | mean over `k<d` | CoV |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.8885 | 0.8789 | 0.8544 | 0.8808 | 0.8787 | 0.8901 | **0.879** | 1.3% |
+| 2 | 0.8096 | 0.7899 | 0.7633 | 0.7586 | 0.7920 | 0.7945 | **0.785** | 2.3% |
+| 4 | *0.6425* | 0.6218 | 0.5968 | 0.6134 | 0.6321 | 0.6400 | **0.621** | 2.4% |
+| 8 | — | *0.4069* | 0.3635 | 0.4255 | 0.4352 | 0.4199 | **0.411** | 6.8% |
+| 16 | — | — | *0.1743* | 0.2072 | 0.2087 | 0.2471 | **0.221** | 8.4% |
+| 32 | — | — | — | *0.0736* | 0.0770 | 0.0817 | **0.079** | 2.9% |
+
+**The token dimension almost drops out.** At `k=4`, acceptance is 0.62 whether the token has 4
+dimensions or 128 — a 32× range of `d` moving acceptance by 2.4%. This is a much stronger form of
+the E1.1/E1.1b claim than either produced. E1.1 showed acceptance falling with `d`; E1.1b showed the
+fall survives holding model agreement fixed; E1.2a shows the governing variable is *the dimension of
+the space the test is performed in*, and that the token's own dimension matters only insofar as it
+is that space. The mechanism is now isolated about as cleanly as this testbed allows.
+
+**What the null control costs us, stated plainly.** The corresponding gains over raw verification
+are 1.0× / 1.5× / 3.4× / 8.3× / 35.6× / 180.4× at `k=4` for `d` = 4 → 128. **A random projection with
+no structure whatsoever recovers acceptance from 0.0035 to 0.64 at `d=128`.** So "verifying a
+low-dimensional statistic restores acceptance" — C2 as previously worded — is now *established*, and
+established by the null control, which means it is not evidence for anything HERALD proposes. Any
+transform-domain (E1.2b) or learned (E1.3) statistic has to be judged against this curve at matched
+`k`, never against raw verification. This is exactly what Fearnhead & Prangle (JRSS-B 2012) predict
+for ABC and what Grouped Speculative Decoding (ICCV 2025) proves for the discrete case; we now have
+it measured in our own setting.
+
+**Caveats, and the largest one is structural.** *Acceptance here is not free.* Everything in the null
+space of `A` is unverified — draft and target may disagree arbitrarily in `d − k` directions and the
+token is still accepted. This experiment measures only the acceptance side of that trade and says
+nothing about the resulting sample quality, so the numbers above are an upper bound on what any
+`k`-dimensional rule can deliver and *not* a speedup. The fidelity side is the whole difficulty, and
+it is what makes the choice of statistic (E1.2b, E1.3) matter at all: at matched `k` every rule sits
+at roughly the same acceptance, so a structured statistic can only win on *what it discards*. That
+reframes the ladder — the interesting axis is fidelity at matched `k`, not acceptance at matched `k`.
+Also: spread over draws of `A` grows with `d` (max std 0.007 at `d=4`, 0.049 at `d=128`), so a single
+random projection is a noisy baseline at high `d` and five draws is on the low side. Same single
+dataset, seed, and capacity gap as E1.1, and these are the 4,000-step checkpoints E1.1b showed to be
+slightly past their best validation NLL.
+
+**Changes:**
+- `herald/verifiers/projected.py` added: uniform-on-Stiefel `random_projection`, exact pushforward
+  `project_mixture` (a projected diagonal Gaussian has a *full* `k × k` covariance), and
+  `projected_log_ratio`. Ten tests, anchored on the `k = d` invariance.
+- `measure_acceptance` gains a `projection` argument, so E1.1, E1.1b and the whole E1.2/E1.3 ladder
+  share one estimator and report all statistics in the space actually being verified.
+- **C2 needs restating.** "Verifying a low-dimensional learned semantic statistic restores
+  acceptance" is now partly true-but-vacuous: the *low-dimensional* half is established and free,
+  and the *learned semantic* half carries the entire claim. C2 should be rewritten in terms of
+  fidelity at matched `k`. Flagged here; not rewritten unilaterally.
+
+---
+
 ## Next up
 
-- **E1.2a** The null control: same sweep, verifying a random *k*-dim projection. CPU-only, so it can
-  run while the GPUs stay occupied, and it is the first rung of the ladder that E1.3 must clear.
+- **E1.2-fidelity** The measurement E1.2a showed the ladder actually needs: at matched `k`, what does
+  each rule *discard*? Acceptance is now known to be a function of `k` alone, so it cannot separate
+  the rungs — reconstruction error and distributional distance on the accepted tokens can. This has
+  to exist before E1.2b is worth running, and it is CPU-only.
+- **E1.2b** The transform-domain statistic. Literature-cleared 2026-09-02; read GSD and CASCADE in
+  full first, and frame against PCG/FreqCa/ABC as prior rather than as insight.
 - **E0.3** The temperature sweep on real models — the capture run. Blocks everything downstream.
   Harness built and tested; blocked only on GPU availability, with all 8 A6000s fully allocated to
   another user (47.7 GB each, ~1.4 GiB free) for this entire session.

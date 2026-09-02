@@ -14,6 +14,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from herald.models.ts_mar import TimeSeriesMAR, random_masking
+from herald.verifiers.projected import project_mixture
 
 #: The testbed's draft/target pair. Target is the expensive, accurate model; draft is the cheap one.
 #: Held fixed across every sweep so the capacity gap -- the thing that generates disagreement in the
@@ -31,6 +32,7 @@ def measure_acceptance(
     batch_size: int = 128,
     max_batches: int = 40,
     seed: int = 0,
+    projection: torch.Tensor | None = None,
 ) -> dict:
     """Exact acceptance, plus the per-coordinate disagreement that should explain it.
 
@@ -43,6 +45,13 @@ def measure_acceptance(
     cannot distinguish a dimensional effect from the draft simply being worse, and the
     equal-covariance closed form is blind to scale disagreement -- so reporting the rate without
     these two is reporting a number that cannot be interpreted.
+
+    Args:
+        projection: optional ``(k, d)`` matrix. When given, the draft still proposes a *full* token
+            but only ``A x`` is verified, and every statistic below is reported in the projected
+            space -- so ``delta_median`` stays comparable across ``k`` and is not silently the raw
+            token's disagreement. This is the E1.2/E1.3 setting; ``None`` is E1.1's raw
+            verification, and the two share this function so the ladder's rungs cannot drift apart.
     """
     draft.eval()
     target.eval()
@@ -71,15 +80,23 @@ def measure_acceptance(
             q = draft.token_distribution(draft.forward_predictor(tokens, mask))
             p = target.token_distribution(target.forward_predictor(tokens, mask))
 
+            # The draft always proposes the full token; the projection changes only what is checked.
             x = q.sample()
-            log_ratio = (p.log_prob(x) - q.log_prob(x))[mask]
+            if projection is None:
+                q_eff, p_eff, x_eff = q, p, x
+            else:
+                q_eff = project_mixture(q, projection)
+                p_eff = project_mixture(p, projection)
+                x_eff = x @ projection.T
+
+            log_ratio = (p_eff.log_prob(x_eff) - q_eff.log_prob(x_eff))[mask]
             probs.append(torch.clamp(log_ratio.exp(), max=1.0).cpu())
             log_ratios.append(log_ratio.cpu())
 
-            d = tokens.shape[-1]
-            mean_gap = (p.mean - q.mean)[mask]
-            var_q = q.variance[mask].clamp_min(1e-12)
-            var_p = p.variance[mask].clamp_min(1e-12)
+            d = x_eff.shape[-1]
+            mean_gap = (p_eff.mean - q_eff.mean)[mask]
+            var_q = q_eff.variance[mask].clamp_min(1e-12)
+            var_p = p_eff.variance[mask].clamp_min(1e-12)
             sigma = var_q.mean(-1).sqrt().clamp_min(1e-8)
             gaps.append((mean_gap.norm(dim=-1) / (sigma * np.sqrt(d))).cpu())
             sigma_gaps.append((0.5 * (var_p.log() - var_q.log())).abs().mean(-1).cpu())
@@ -92,6 +109,7 @@ def measure_acceptance(
     sigma_gaps = torch.cat(sigma_gaps)
     log_ratios = torch.cat(log_ratios)
     return {
+        "verified_dim": int(d),
         "acceptance": float(probs.mean()),
         "acceptance_std": float(probs.std()),
         # The estimate is one Monte Carlo draw per token, so it carries sampling noise. Comparing

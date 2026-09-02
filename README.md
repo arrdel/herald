@@ -50,10 +50,21 @@ decoding decays sharply with token dimension *d*. CSpD's reported speedups depen
 setting) acceptance collapses. This is measurable in an afternoon and is publishable on its own
 as a negative result about the current state of continuous speculative decoding.
 
-**C2 (mechanism, medium confidence).** Verifying a *k*-dimensional semantic projection
-(k ≈ 64–768) instead of the *d*-dimensional token restores high acceptance, because the density
-ratio concentrates far more slowly in the projected space. The JEPA predictor supplies both the
-projection and the reference distribution.
+**C2 (mechanism, medium confidence — *restated 2026-09-02 after E1.2a*).** Verifying a
+*k*-dimensional semantic projection instead of the *d*-dimensional token restores high acceptance,
+because the density ratio concentrates far more slowly in the projected space. The JEPA predictor
+supplies both the projection and the reference distribution.
+
+*The first half of that is now measured, and it is free.* E1.2a verified a **random** orthonormal
+projection and found acceptance is governed by *k* essentially alone — 0.62 at *k*=4 for every *d*
+from 4 to 128 (coefficient of variation 2.4%), lifting acceptance from 0.0035 to 0.64 at *d*=128
+without any structure whatsoever. So "low-dimensional verification restores acceptance" is
+established *by the null control* and is not evidence for a learned projection.
+
+**What C2 must therefore claim is fidelity, not acceptance.** At matched *k* every rule sits at
+roughly the same acceptance, so a semantic projection can only win on *what it discards*. C2 is
+scored against the E1.2a curve at matched *k*, on sample quality — never against raw token-space
+verification.
 
 **C3 (method, to be earned).** HERALD achieves ≥2× fewer NFE than CSpD at matched FID/CMMD,
 while carrying a *stronger* guarantee than CSpD actually delivers: distribution-free,
@@ -66,7 +77,9 @@ claim that the temperature hack invalidates.
   the motivation evaporates. **Check this first, before writing any method code.**
 - C2 fails if acceptance in semantic space does not improve over token space at matched
   guarantee strength, or if the improvement is entirely explained by the projection discarding
-  the information that mattered.
+  the information that mattered. **The second clause has partly fired:** E1.2a shows a random
+  projection captures the whole acceptance gain, so C2 now stands or falls on fidelity at matched
+  *k* against E1.2a's curve, not on acceptance.
 - C3 fails if few-step distillation (consistency models, shortcut models) dominates on the
   speed/quality frontier, making speculation the wrong tool. This is the most likely failure
   mode and we benchmark against it from day one rather than at rebuttal time.
