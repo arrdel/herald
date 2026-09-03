@@ -22,7 +22,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from herald.models.ts_mar import MARConfig, TimeSeriesMAR
+from herald.models.ts_mar import MARConfig, TimeSeriesMAR, random_masking
 from herald.models.ts_tokenizer import TimeSeriesTokenizer, TokenizerConfig
 
 
@@ -229,6 +229,40 @@ def tokenizer_loss(model: TimeSeriesTokenizer, batch: torch.Tensor) -> dict[str,
 
 def mar_loss(model: TimeSeriesMAR, batch: torch.Tensor) -> dict[str, torch.Tensor]:
     return model.loss(batch)
+
+
+def distillation_loss(
+    target: TimeSeriesMAR, seed: int = 0
+) -> Callable[[TimeSeriesMAR, torch.Tensor], dict[str, torch.Tensor]]:
+    """Train a draft to imitate a frozen target, rather than to fit the data.
+
+    E1.2b's conservation result says the acceptance/fidelity frontier is fixed by how far apart the
+    draft and target are: any acceptance rule only chooses a point on it. The single lever that moves
+    the frontier itself is therefore to move ``q`` towards ``p``, and this is that lever.
+
+    The direction matters. Minimising ``KL(p‖q)`` -- estimated by drawing from the target and scoring
+    those draws under the draft -- is mode-*covering*, so the draft is pushed to put mass wherever the
+    target does. That is exactly the failure mode speculative sampling is sensitive to, because a
+    draft that misses a region of the target's support is rejected there every time. The reverse KL
+    would let the draft collapse onto one mode and score well while being useless as a proposal.
+
+    The target is frozen and used only under ``no_grad``, so the draft can never improve the loss by
+    dragging the target towards itself.
+    """
+    target = target.eval()
+    for param in target.parameters():
+        param.requires_grad_(False)
+    generator = torch.Generator(device="cpu").manual_seed(seed)
+
+    def loss_fn(model: TimeSeriesMAR, batch: torch.Tensor) -> dict[str, torch.Tensor]:
+        mask = random_masking(batch.shape[0], batch.shape[1], batch.device, generator=generator)
+        with torch.no_grad():
+            sample = target.token_distribution(target.forward_predictor(batch, mask)).sample()
+        q = model.token_distribution(model.forward_predictor(batch, mask))
+        nll = -q.log_prob(sample)[mask].mean()
+        return {"loss": nll, "distill_nll": nll.detach()}
+
+    return loss_fn
 
 
 def save_checkpoint(model: torch.nn.Module, config: TrainConfig, path: Path) -> None:
