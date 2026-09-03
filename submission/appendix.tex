@@ -99,7 +99,7 @@ $A\Sigma A^\top$ equal to $\sigma^2 I_\kk$ for \emph{every} orthonormal $A$; wit
 components the pushforward acquires a genuine $\kk\times\kk$ covariance that depends on $A$, and the
 identity becomes approximate. The mixture structure adds a second source of slack, since the KL
 between mixtures does not decompose. Both are reasons to measure rather than assume, which is what
-\S\ref{sec:conservation} does; the observed departures from a single curve are $5.2\%$ of the range at
+\S\ref{sec:conservation} does; the observed departures from a single curve are $4.0\%$ of the range at
 $\dd{=}64$.
 
 \paragraph{The random-subspace corollary.} If $A$ is drawn uniformly from the Stiefel manifold, then
@@ -269,9 +269,9 @@ validation loss turns over early and the two models proceed to overfit apart rat
 More training makes speculative acceptance worse, not better, which is the opposite of what the
 confound predicts.
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=\textwidth]{figures/e11b_convergence.png}
+\includegraphics[width=0.92\textwidth]{figures/e11b_convergence.png}
 \caption{Convergence traces at $\dd \in \{16, 128\}$. Acceptance is measured between draft and target
 checkpoints throughout training. Both dimensions plateau well inside the budget used for
 Table~\ref{tab:e11}, and continued training lowers acceptance rather than raising it: the two models
@@ -313,7 +313,7 @@ Acceptance is a function of $\kk$ essentially alone: at $\kk = 4$ the rate is $0
 ambient dimension is $4$ or $128$. As a check on the implementation, $\kk = \dd$ reproduces raw
 verification to four decimal places at all six dimensions.
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=0.92\textwidth]{figures/e12a_random_projection.png}
 \caption{The null control. Acceptance under a random $\kk$-dimensional statistic, for every ambient
@@ -341,8 +341,9 @@ excess NLL & $-0.003$ & 1.423 & 3.802 & 5.352 & 6.397 & $+0.125$ & 11.300 & 27.6
 \end{tabular}
 \end{center}
 
-The exact anchors read $-0.0031 \pm 0.0520$ at $\dd{=}16$ and $+0.1251 \pm 0.1375$ at $\dd{=}64$, both
-consistent with the losslessness guarantee of Appendix~\ref{app:exactness}.
+The exact anchors read $-0.1109 \pm 0.0912$ at $\dd{=}64$ and $+0.1883 \pm 0.1896$ at $\dd{=}128$, both
+within $1.2$ standard errors of zero and consistent with the losslessness guarantee of
+Appendix~\ref{app:exactness}.
 
 \subsection{Five subspace rules at matched $\kk$}
 
@@ -355,53 +356,53 @@ acceptance, trace one curve (Table~\ref{tab:collapse}).
 \small
 \begin{tabular}{llccc|llccc}
 \toprule
-\multicolumn{5}{c|}{$\dd = 16$} & \multicolumn{5}{c}{$\dd = 64$} \\
+\multicolumn{5}{c|}{$\dd = 64$} & \multicolumn{5}{c}{$\dd = 128$} \\
 $\kk$ & rule & acc. & nats & energy & $\kk$ & rule & acc. & nats & energy \\
 \midrule
-16 & exact         & 0.173 & $+0.03$ & $+0.10$ & 64 & exact         & 0.018 & $-0.01$ & $-0.03$ \\
+64 & exact         & 0.018 & $-0.11$ & $-0.14$ & 128 & exact         & 0.004 & $+0.19$ & $+0.15$ \\
 \midrule
-1 & random        & 0.851 & $+6.11$ & $+1.13$ & 1 & random        & 0.879 & $+25.54$ & $+1.26$ \\
-1 & pca           & 0.736 & $+5.23$ & $+0.84$ & 1 & pca           & 0.612 & $+17.11$ & $+0.57$ \\
-1 & signal-top    & 0.794 & $+5.55$ & $+1.01$ & 1 & signal-top    & 0.664 & $+19.54$ & $+0.68$ \\
-1 & dct-low       & 0.795 & $+5.55$ & $+0.99$ & 1 & dct-low       & 0.662 & $+19.51$ & $+0.69$ \\
-1 & signal-bottom & 0.897 & $+6.46$ & $+1.70$ & 1 & signal-bottom & 0.917 & $+26.52$ & $+1.22$ \\
+1 & random        & 0.868 & $+25.04$ & $+1.05$ & 1 & random        & 0.886 & $+46.83$ & $+1.16$ \\
+1 & pca           & 0.614 & $+17.15$ & $+0.48$ & 1 & pca           & 0.525 & $+26.44$ & $+0.46$ \\
+1 & signal-top    & 0.668 & $+19.75$ & $+0.76$ & 1 & signal-top    & 0.592 & $+31.27$ & $+0.60$ \\
+1 & dct-low       & 0.666 & $+19.69$ & $+0.77$ & 1 & dct-low       & 0.592 & $+31.00$ & $+0.59$ \\
+1 & signal-bottom & 0.918 & $+26.45$ & $+1.34$ & 1 & signal-bottom & 0.916 & $+48.40$ & $+1.44$ \\
 \midrule
-2 & random        & 0.752 & $+5.24$ & $+0.91$ & 2 & random        & 0.789 & $+22.18$ & $+0.92$ \\
-2 & pca           & 0.563 & $+3.57$ & $+0.44$ & 2 & pca           & 0.360 & $+8.85$  & $+0.38$ \\
-2 & signal-top    & 0.669 & $+4.27$ & $+0.27$ & 2 & signal-top    & 0.440 & $+12.28$ & $+0.24$ \\
-2 & dct-low       & 0.667 & $+4.26$ & $+0.26$ & 2 & dct-low       & 0.437 & $+12.18$ & $+0.22$ \\
-2 & signal-bottom & 0.840 & $+5.83$ & $+1.24$ & 2 & signal-bottom & 0.864 & $+24.22$ & $+1.06$ \\
+2 & random        & 0.799 & $+22.78$ & $+0.86$ & 2 & random        & 0.794 & $+41.49$ & $+0.88$ \\
+2 & pca           & 0.359 & $+8.76$ & $+0.26$ & 2 & pca           & 0.299 & $+13.72$ & $+0.25$ \\
+2 & signal-top    & 0.441 & $+12.05$ & $+0.16$ & 2 & signal-top    & 0.267 & $+11.91$ & $+0.23$ \\
+2 & dct-low       & 0.438 & $+11.96$ & $+0.11$ & 2 & dct-low       & 0.268 & $+11.96$ & $+0.25$ \\
+2 & signal-bottom & 0.863 & $+24.50$ & $+1.34$ & 2 & signal-bottom & 0.865 & $+44.99$ & $+1.13$ \\
 \midrule
-4 & random        & 0.606 & $+3.66$ & $+0.39$ & 4 & random        & 0.635 & $+17.39$ & $+0.45$ \\
-4 & pca           & 0.383 & $+1.66$ & $+0.25$ & 4 & pca           & 0.142 & $+2.70$  & $+0.09$ \\
-4 & signal-top    & 0.437 & $+2.17$ & $+0.09$ & 4 & signal-top    & 0.180 & $+3.56$  & $+0.05$ \\
-4 & dct-low       & 0.435 & $+2.16$ & $+0.10$ & 4 & dct-low       & 0.180 & $+3.55$  & $+0.05$ \\
-4 & signal-bottom & 0.741 & $+4.77$ & $+0.83$ & 4 & signal-bottom & 0.790 & $+21.45$ & $+0.96$ \\
+4 & random        & 0.652 & $+17.74$ & $+0.56$ & 4 & random        & 0.652 & $+32.78$ & $+0.65$ \\
+4 & pca           & 0.144 & $+2.78$ & $+0.01$ & 4 & pca           & 0.084 & $+2.80$ & $+0.20$ \\
+4 & signal-top    & 0.182 & $+3.70$ & $+0.02$ & 4 & signal-top    & 0.114 & $+4.48$ & $+0.15$ \\
+4 & dct-low       & 0.181 & $+3.67$ & $+0.01$ & 4 & dct-low       & 0.113 & $+4.41$ & $+0.15$ \\
+4 & signal-bottom & 0.791 & $+21.40$ & $+0.99$ & 4 & signal-bottom & 0.796 & $+40.58$ & $+0.83$ \\
 \midrule
-8 & random        & 0.369 & $+1.47$ & $+0.16$ & 8 & random        & 0.428 & $+10.52$ & $+0.23$ \\
-8 & pca           & 0.246 & $+0.65$ & $-0.03$ & 8 & pca           & 0.077 & $+1.13$  & $+0.09$ \\
-8 & signal-top    & 0.273 & $+0.75$ & $+0.15$ & 8 & signal-top    & 0.099 & $+1.55$  & $-0.01$ \\
-8 & dct-low       & 0.272 & $+0.75$ & $+0.13$ & 8 & dct-low       & 0.098 & $+1.51$  & $-0.03$ \\
-8 & signal-bottom & 0.554 & $+3.06$ & $+0.32$ & 8 & signal-bottom & 0.687 & $+17.75$ & $+0.56$ \\
+8 & random        & 0.419 & $+10.24$ & $+0.12$ & 8 & random        & 0.432 & $+20.19$ & $+0.26$ \\
+8 & pca           & 0.075 & $+1.05$ & $-0.15$ & 8 & pca           & 0.034 & $+1.11$ & $+0.17$ \\
+8 & signal-top    & 0.100 & $+1.66$ & $-0.10$ & 8 & signal-top    & 0.042 & $+1.33$ & $+0.17$ \\
+8 & dct-low       & 0.098 & $+1.63$ & $-0.11$ & 8 & dct-low       & 0.041 & $+1.33$ & $+0.16$ \\
+8 & signal-bottom & 0.683 & $+17.67$ & $+0.70$ & 8 & signal-bottom & 0.685 & $+33.62$ & $+0.75$ \\
 \midrule
-  &               &       &         &         & 16 & random        & 0.210 & $+4.21$  & $+0.06$ \\
-  &               &       &         &         & 16 & pca           & 0.049 & $+0.52$  & $-0.01$ \\
-  &               &       &         &         & 16 & signal-top    & 0.057 & $+0.62$  & $+0.08$ \\
-  &               &       &         &         & 16 & dct-low       & 0.057 & $+0.64$  & $+0.09$ \\
-  &               &       &         &         & 16 & signal-bottom & 0.518 & $+12.41$ & $+0.45$ \\
+16 & random        & 0.214 & $+4.21$ & $-0.06$ & 16 & random        & 0.268 & $+11.25$ & $+0.08$ \\
+16 & pca           & 0.047 & $+0.48$ & $-0.12$ & 16 & pca           & 0.018 & $+0.56$ & $+0.14$ \\
+16 & signal-top    & 0.056 & $+0.59$ & $-0.14$ & 16 & signal-top    & 0.024 & $+0.77$ & $+0.16$ \\
+16 & dct-low       & 0.059 & $+0.69$ & $-0.14$ & 16 & dct-low       & 0.025 & $+0.77$ & $+0.16$ \\
+16 & signal-bottom & 0.520 & $+12.35$ & $+0.20$ & 16 & signal-bottom & 0.550 & $+25.43$ & $+0.43$ \\
 \midrule
-  &               &       &         &         & 32 & random        & 0.077 & $+0.95$  & $+0.04$ \\
-  &               &       &         &         & 32 & pca           & 0.033 & $+0.19$  & $-0.01$ \\
-  &               &       &         &         & 32 & signal-top    & 0.037 & $+0.26$  & $+0.01$ \\
-  &               &       &         &         & 32 & dct-low       & 0.038 & $+0.26$  & $+0.11$ \\
-  &               &       &         &         & 32 & signal-bottom & 0.319 & $+6.49$  & $-0.14$ \\
+32 & random        & 0.079 & $+0.91$ & $-0.11$ & 32 & random        & 0.090 & $+2.96$ & $+0.13$ \\
+32 & pca           & 0.033 & $+0.14$ & $-0.09$ & 32 & pca           & 0.013 & $+0.39$ & $+0.16$ \\
+32 & signal-top    & 0.037 & $+0.21$ & $-0.14$ & 32 & signal-top    & 0.016 & $+0.45$ & $+0.14$ \\
+32 & dct-low       & 0.038 & $+0.27$ & $-0.08$ & 32 & dct-low       & 0.017 & $+0.45$ & $+0.17$ \\
+32 & signal-bottom & 0.314 & $+6.56$ & $-0.02$ & 32 & signal-bottom & 0.345 & $+14.80$ & $+0.04$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=\textwidth]{figures/e12b_collapse.png}
+\includegraphics[width=0.86\textwidth]{figures/e12b_collapse_gpu.png}
 \caption{The full version of Figure~\ref{fig:onefrontier}, with both cost axes. \textbf{Top:} excess
 NLL. \textbf{Bottom:} signal-domain energy distance, which is noisier (its per-window estimator has
 a standard deviation of order the signal scale) but shows the same collapse and the same failure of
@@ -424,12 +425,16 @@ within error at every stage, confirming that the acceptance gains are free rathe
 
 \begin{center}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lccccccc}
 \toprule
-$\dd$ & 0 steps & 600 steps & 1{,}200 steps & 1{,}800 steps & total gain \\
+$\dd$ & 0 steps & 2{,}000 & 4{,}000 & 6{,}000 & 8{,}000 & 10{,}000 & total gain \\
 \midrule
-16 & 0.1744 & 0.1850 & 0.1960 & 0.1979 & $1.13\times$ \\
-64 & 0.0182 & 0.0185 & 0.0213 & 0.0245 & $1.34\times$ \\
+4 & 0.6453 & 0.6860 & 0.6977 & 0.7131 & 0.7078 & 0.7198 & $\best{1.12\times}$ \\
+8 & 0.4018 & 0.4383 & 0.4542 & 0.4600 & 0.4680 & 0.4728 & $\best{1.18\times}$ \\
+16 & 0.1779 & 0.2095 & 0.2244 & 0.2311 & 0.2431 & 0.2507 & $\best{1.41\times}$ \\
+32 & 0.0722 & 0.0891 & 0.0960 & 0.1040 & 0.1017 & 0.1084 & $\best{1.50\times}$ \\
+64 & 0.0176 & 0.0251 & 0.0328 & 0.0388 & 0.0413 & 0.0459 & $\best{2.61\times}$ \\
+128 & 0.0036 & 0.0073 & 0.0120 & 0.0142 & 0.0210 & 0.0208 & $\best{5.72\times}$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -516,7 +521,7 @@ training makes acceptance worse.
 \item \textbf{Some subspace beats the frontier.} Falsified by any rule sitting materially below the
 random-projection curve at matched acceptance. Five rules were tried, including one designed with full
 knowledge of the decoder and one designed to be as bad as possible; the largest departure in either
-direction is $5.2\%$ of the range, and the sign of the departure is not stable across $\kk$. A
+direction is $4.0\%$ of the range, and the sign of the departure is not stable across $\kk$. A
 nonlinear statistic is not covered by Proposition~\ref{prop:rowspace} and remains open, though it
 forfeits the exactness of the projected test.
 
@@ -560,9 +565,9 @@ $\dd = 4$ ($M = 0.93$, $\bar A = 0.64$) and hopeless at $\dd = 128$ ($M = 5.83$,
 $\bar A = 0.0035$). The same drafter is excellent or useless depending only on the width of the
 latent it operates in.
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.9\textwidth]{figures/e12_frontier.png}
+\includegraphics[width=0.78\textwidth]{figures/e12_frontier.png}
 \caption{The acceptance/fidelity frontier for random projections alone, measured before the
 structured rules of Appendix~\ref{app:results} were built. The red star is exact verification, which
 is lossless. This curve was constructed as the bar that a structured statistic would have to beat;

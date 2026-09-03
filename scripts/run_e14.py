@@ -168,11 +168,16 @@ def summarize(results: list[dict]) -> list[str]:
     return lines
 
 
-def plot(results: list[dict], path: Path) -> Path:
+def plot(results: list[dict], path: Path, ncols: int = 3) -> Path:
     n = len(results)
-    fig, axes = plt.subplots(1, n, figsize=(5.8 * n, 4.8), squeeze=False)
+    ncols = min(ncols, n)
+    nrows = -(-n // ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5.8 * ncols, 4.8 * nrows), squeeze=False)
+    flat = [ax for row in axes for ax in row]
+    for ax in flat[n:]:
+        ax.set_visible(False)
 
-    for ax, r in zip(axes[0], results, strict=True):
+    for ax, r in zip(flat[:n], results, strict=True):
         base = r["stages"][0]["rows"]
         proj = sorted((row["acceptance"], row["excess_nll"]) for row in base
                        if row["rule"] == "random")
@@ -193,6 +198,84 @@ def plot(results: list[dict], path: Path) -> Path:
                      "distillation moves it", fontsize=10)
         ax.legend(fontsize=8, loc="upper left")
         ax.grid(alpha=0.3)
+
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
+def plot_headline(results: list[dict], path: Path) -> Path:
+    """Two panels for the main text: the mechanism at one dimension, then its trend across all.
+
+    The right panel is the claim the single-dimension view cannot make: the gain is not a fixed
+    bonus, it grows with the dimension, so distillation helps most exactly where the collapse of
+    Section 3 bites hardest.
+    """
+    fig, (left, right) = plt.subplots(1, 2, figsize=(11.0, 4.2))
+
+    worst = max(results, key=lambda r: r["d"])
+    base = worst["stages"][0]["rows"]
+    undistilled = next(row for row in base if row["rule"] == "exact")
+    # Exact verification is the k=d endpoint of the projection curve, so it belongs on the frontier;
+    # without it the curve appears to start in mid-air well to the right of where distillation works.
+    proj = sorted([(row["acceptance"], row["excess_nll"]) for row in base if row["rule"] == "random"]
+                  + [(undistilled["acceptance"], undistilled["excess_nll"])])
+    left.plot([p[0] for p in proj], [p[1] for p in proj], "o-", color="#2b6cb0",
+              label="projection frontier (undistilled)")
+
+    stars = []
+    shades = plt.cm.Reds(np.linspace(0.45, 0.95, len(worst["stages"])))
+    for stage, color in zip(worst["stages"], shades, strict=True):
+        ex = next(row for row in stage["rows"] if row["rule"] == "exact")
+        stars.append(ex["acceptance"])
+        left.scatter([ex["acceptance"]], [ex["excess_nll"]], marker="*", s=210, color=color,
+                     zorder=5, label=f"exact, {stage['step']} steps")
+
+    # At high d the distilled points occupy a sliver of the acceptance range while the frontier runs
+    # to ~0.9, so a linear axis stacks every star on the origin. Acceptance spans two decades here.
+    left.set_xscale("log")
+
+    # The vertical gap at the final distilled acceptance is the quantity the paper reports: what the
+    # frontier charges for the rate distillation reached for nothing.
+    cost = worst["projection_nats_for_same_acceptance"]
+    if cost is not None:
+        left.annotate("", xy=(max(stars), cost), xytext=(max(stars), 0.0),
+                      arrowprops={"arrowstyle": "<->", "color": "#2f855a", "lw": 1.6})
+        left.text(max(stars) * 1.25, cost * 0.55, f"{cost:.2f} nats\nsaved", fontsize=8,
+                  color="#2f855a", va="center")
+        # The frontier runs to tens of nats at high acceptance, which would flatten the gap being
+        # annotated; clip to the region where the two are actually being compared.
+        top = 4.0 * cost
+        left.set_ylim(-0.28 * cost, top)
+        onscreen = [p[0] for p in proj if p[1] <= top] + stars
+        left.set_xlim(min(onscreen) * 0.7, max(onscreen) * 2.0)
+    left.axhline(0.0, ls=":", color="grey", lw=1.2)
+    left.set_xlabel("acceptance rate (log scale)")
+    left.set_ylabel("excess NLL under the target (nats/token)")
+    left.set_title(f"$d={worst['d']}$: projection climbs, distillation\nadvances along zero",
+                   fontsize=10)
+    left.legend(fontsize=7, loc="upper left")
+    left.grid(alpha=0.3)
+
+    dims = [r["d"] for r in results]
+    gains = [r["speedup_ratio"] for r in results]
+    right.plot(dims, gains, "o-", color="#c53030", lw=2, ms=7)
+    for d, g in zip(dims, gains, strict=True):
+        right.annotate(f"{g:.2f}$\\times$", (d, g), textcoords="offset points", xytext=(0, 8),
+                       ha="center", fontsize=8)
+    right.axhline(1.0, ls=":", color="grey", lw=1.2, label="no gain")
+    right.set_xscale("log", base=2)
+    right.set_xticks(dims)
+    right.set_xticklabels([str(d) for d in dims])
+    right.set_xlabel("token dimension $d$")
+    right.set_ylabel("lossless acceptance gain from distillation")
+    right.set_title("The gain grows with dimension:\ndistillation helps most where collapse is worst",
+                    fontsize=10)
+    right.set_ylim(0.0, max(gains) * 1.22)
+    right.legend(fontsize=8, loc="upper left")
+    right.grid(alpha=0.3)
 
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -227,7 +310,10 @@ def main() -> None:
 
     if args.plot_only:
         payload = json.loads((out / "results.json").read_text())
-        print(plot(payload["results"], Path(args.figure)))
+        figure = Path(args.figure)
+        print(plot(payload["results"], figure))
+        print(plot_headline(payload["results"],
+                            figure.with_name(figure.stem + "_headline" + figure.suffix)))
         print("\n".join(summarize(payload["results"])))
         return
 

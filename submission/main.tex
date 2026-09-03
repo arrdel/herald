@@ -46,13 +46,14 @@ output, and orthonormality forces their sum to be constant. Acceptance and fidel
 of one conserved budget, so every choice of verified subspace merely selects a point on a single
 curve fixed by the model pair. We test the prediction against five subspace rules: random,
 principal-component, decoder-Jacobian, low-frequency DCT band, and an adversarial anti-control that
-verifies the least important directions. Their costs span $26$ nats, yet at matched acceptance every
-rule lies within $\best{5.2\%}$ of the range of one curve, and the anti-control ranks best at several
-points, which is what a noise ordering looks like. The corollary is constructive: the only lever is
-the divergence itself. Distilling the draft towards the target moves the frontier rather than
-sliding along it, raising lossless acceptance by $\best{1.34\times}$ at $\dd{=}64$
-\textbf{at zero fidelity cost}, an acceptance gain that the best projection rule can buy only by
-leaking $0.061$ nats per token. Finally, we show that a
+verifies the least important directions. Across six token dimensions their costs span $48$ nats, yet
+at matched acceptance every rule lies within $\best{4.0\%}$ of the range of one curve, and the
+anti-control ranks best at the three largest dimensions, which is what a noise ordering looks like.
+The corollary is constructive: the only lever is the divergence itself. Distilling the draft towards
+the target moves the frontier rather than sliding along it, raising lossless acceptance by
+$\best{5.72\times}$ at $\dd{=}128$ \textbf{at zero fidelity cost}, a gain the best projection rule can
+buy only by leaking $0.74$ nats per token. That gain \emph{grows} with dimension, so the one
+intervention the conservation law permits is also the one that scales with the obstruction. Finally, we show that a
 published continuous speculative decoder applies its trajectory normalisation inverted, making its
 acceptance ratio wrong by the square of a factor we bound at $\best{e^{161}}$.
 \end{abstract}
@@ -105,8 +106,9 @@ rather than a training artefact. We rule out the obvious confound with matched-c
 that for shared-covariance Gaussians the divergence visible to an orthonormal statistic and the
 divergence that escapes it sum to a constant independent of the statistic. Acceptance and fidelity
 are therefore not independently controllable, and no choice of subspace can beat any other. We
-confirm this on real models across five subspace rules including an adversarial anti-control: costs
-spanning $26$ nats collapse to within $5.2\%$ of a single curve.
+confirm this on real models over six token dimensions and five subspace rules including an
+adversarial anti-control: costs spanning $48$ nats collapse to within $\best{4.0\%}$ of a single
+curve, and the margin tightens as $\dd$ grows.
 
 \item \textbf{A fidelity metric that cannot be gamed} (\S\ref{sec:metric}). Signal-domain squared
 error against ground truth, the obvious choice, rewards variance shrinkage, and under it every
@@ -116,9 +118,10 @@ the decoded distributions agree and is increased by mode collapse.
 
 \item \textbf{The lever that does work} (\S\ref{sec:moving}). Because the frontier is a property of
 the model pair, the only way to improve it is to shrink the divergence. Mode-covering distillation of
-the draft raises lossless acceptance by $\best{1.13\times}$ at $\dd{=}16$ and $\best{1.34\times}$ at
-$\dd{=}64$, reaching \textbf{at zero fidelity cost} rates that projection can buy only by spending
-$0.179$ and $0.061$ nats per token.
+the draft raises lossless acceptance at all six dimensions, by $\best{5.72\times}$ at $\dd{=}128$,
+reaching \textbf{at zero fidelity cost} rates that projection can buy only by spending up to $0.74$
+nats per token. The gain grows monotonically with $\dd$, which the conservation law predicts and
+which no verification rule can imitate.
 
 \item \textbf{A correction to a published criterion} (\S\ref{sec:cspd}). Continuous speculative
 decoding \citep{wang2025continuous} multiplies its acceptance ratio by an accumulated-variance factor
@@ -337,40 +340,41 @@ decoded emitted waveforms $X, X'$ and decoded target waveforms $Y, Y'$ under the
 It is zero exactly when the decoded distributions agree, and the $-\E\|X - X'\|$ term \emph{penalises}
 the mode collapse that squared error rewards.
 \end{itemize}
-Exact verification anchors both at zero: at $\dd{=}64$ we measure $-0.008 \pm 0.080$ nats and
-$-0.026$ in energy distance, with the residual sampler converging on $100.0\%$ of rejections.
+Exact verification anchors both at zero at every dimension: the excess NLL of the exact rule is
+within $1.2$ standard errors of zero for all six values of $\dd$ (largest deviation $+0.188 \pm 0.190$
+nats at $\dd{=}128$), and the residual sampler converges on $100.0\%$ of rejections throughout.
 
 \begin{table}[t]
 \centering
 \small
-\begin{tabular}{llcccc}
+\begin{tabular}{lcccc}
 \toprule
-& & \multicolumn{2}{c}{excess NLL (nats/token)} & \multicolumn{2}{c}{signal energy distance} \\
-\cmidrule(lr){3-4}\cmidrule(lr){5-6}
-$\dd$ & quantity & value & vs.\ range & value & vs.\ range \\
+$\dd$ & cost range spanned & median deviation & max deviation & \textbf{max as \% of range} \\
+ & (nats/token) & from one curve & from one curve & \\
 \midrule
-16 & range spanned by the five rules & 5.812 & n/a & 1.727 & n/a \\
-16 & median deviation from one curve & 0.077 & 1.3\% & 0.085 & 4.9\% \\
-16 & \textbf{max} deviation from one curve & \textbf{0.357} & \textbf{6.1\%} & \textbf{0.350} & \textbf{20.3\%} \\
-\midrule
-64 & range spanned by the five rules & 26.325 & n/a & 1.396 & n/a \\
-64 & median deviation from one curve & 0.773 & 2.9\% & 0.051 & 3.7\% \\
-64 & \textbf{max} deviation from one curve & \textbf{1.366} & \textbf{5.2\%} & \textbf{0.282} & \textbf{20.2\%} \\
+4   & 0.240  & 0.027 & 0.038 & 15.9\% \\
+8   & 1.560  & 0.017 & 0.112 & 7.2\% \\
+16  & 5.768  & 0.050 & 0.356 & 6.2\% \\
+32  & 11.341 & 0.331 & 0.950 & 8.4\% \\
+64  & 26.305 & 0.616 & 1.476 & 5.6\% \\
+128 & \textbf{48.016} & 0.777 & 1.933 & $\best{4.0\%}$ \\
 \bottomrule
 \end{tabular}
-\caption{Five subspace rules, one frontier. Each rule's cost is compared against the random-projection
-curve interpolated to the \emph{same acceptance}. Costs vary over $26$ nats across the sweep, but no
-rule departs from a single curve by more than $5.2\%$ of that range.}
+\caption{Five subspace rules, one frontier, across a $32\times$ range of token dimension. Each rule's
+cost is compared against the random-projection curve interpolated to the \emph{same acceptance}.
+Costs vary over $48$ nats at $\dd{=}128$, yet no rule departs from a single curve by more than
+$\best{4.0\%}$ of that range, and the margin \emph{tightens} as $\dd$ grows. Energy-distance figures
+tell the same story and are in Appendix~\ref{app:results}.}
 \label{tab:collapse}
 \end{table}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.97\textwidth]{figures/e12b_collapse_compact.png}
+\includegraphics[width=0.97\textwidth]{figures/e12b_collapse_compact_gpu.png}
 \caption{\textbf{Five subspace rules, one frontier.} Excess NLL against acceptance for all five
 rules and every $\kk$; a point's position along a curve is set by $\kk$, and the question is whether
-the curves differ. They do not: the rules span $26$ nats at $\dd{=}64$ and depart from one another
-by at most $5.2\%$ of that range. The anti-control (red, dashed), which verifies the \emph{least}
+the curves differ. They do not: the rules span $48$ nats at $\dd{=}128$ and depart from one another
+by at most $\best{4.0\%}$ of that range. The anti-control (red, dashed), which verifies the \emph{least}
 important directions, is not separated from the rule built with full knowledge of the decoder. The
 black star marks exact verification, which is lossless and anchors the metric at zero. The
 signal-domain energy distance gives the same picture and is shown in
@@ -378,20 +382,23 @@ Figure~\ref{fig:onefrontier-full}.}
 \label{fig:onefrontier}
 \end{figure}
 
-\paragraph{Result.} Table~\ref{tab:collapse} and Figure~\ref{fig:onefrontier} report the test. For each structured point we
+\paragraph{Result.} Table~\ref{tab:collapse} and Figure~\ref{fig:onefrontier} report the test over
+six token dimensions from $4$ to $128$. For each structured point we
 interpolate the random-projection curve to the same acceptance and record the difference; we never
-extrapolate, so every comparison is against a baseline actually observed at that rate. At $\dd = 64$
-the cost of these rules ranges over $26.3$ nats, and the largest departure from a single curve is
-$1.37$ nats, or $5.2\%$ of the range; at $\dd = 16$ the figures are $5.8$ nats and $6.1\%$. The energy
+extrapolate, so every comparison is against a baseline actually observed at that rate. At $\dd = 128$
+the cost of these rules ranges over $48.0$ nats, and the largest departure from a single curve is
+$1.93$ nats, or $\best{4.0\%}$ of the range; at $\dd = 64$ the figures are $26.3$ nats and $5.6\%$.
+The relative margin does not loosen as the token grows, it tightens, so the collapse is sharpest in
+precisely the regime where escaping it would be worth the most. The energy
 distance tells the same story with a larger relative tolerance, driven by its higher variance.
 
 Two details make this more than a null result. First, the \emph{ordering} of the rules is not stable:
-the anti-control ranks as the \emph{best} rule at several acceptances ($1.26$ nats below the random
-curve at $\dd{=}64$, $\kk{=}8$) and the decoder-Jacobian rule as the worst ($1.37$ nats above at
-$\kk{=}2$). A rule designed to be maximally stupid is indistinguishable from one designed with full
-knowledge of the decoder, once acceptance is held fixed. Second, the rules differ enormously at
-matched $\kk$: at $\dd{=}64, \kk{=}4$ acceptance ranges from $0.14$ (pca) to $0.79$ (anti-control),
-a $5.6\times$ spread, so they are genuinely different rules that happen to land on the same curve.
+the anti-control ranks as the \emph{best} rule at the three largest dimensions ($1.50$ nats below the
+random curve at $\dd{=}128$, $\kk{=}16$) while the decoder-Jacobian rule ranks worst there ($1.93$
+nats above at $\kk{=}1$). A rule designed to be maximally stupid is indistinguishable from one
+designed with full knowledge of the decoder, once acceptance is held fixed. Second, the rules differ
+enormously at matched $\kk$: at $\dd{=}128, \kk{=}16$ acceptance ranges from $0.018$ (pca) to $0.550$
+(anti-control), a $30\times$ spread, so they are genuinely different rules that happen to land on the same curve.
 This also refines the null control's finding: acceptance depends on $\kk$ alone for \emph{random}
 subspaces, which are exchangeable by rotational symmetry, but a structured subspace can deliberately
 sit where $p$ and $q$ agree and buy a much higher rate. It gains nothing by doing so.
@@ -417,43 +424,58 @@ wherever the target does, which is exactly what acceptance is sensitive to.
 \toprule
 $\dd$ & acceptance before & acceptance after & gain & fidelity cost & projection cost for same rate \\
 \midrule
-16 & 0.1744 & \textbf{0.1979} & $\best{1.13\times}$ & $\best{0}$ \textbf{(exact)} & $0.179$ nats/token \\
-64 & 0.0182 & \textbf{0.0245} & $\best{1.34\times}$ & $\best{0}$ \textbf{(exact)} & $0.061$ nats/token \\
+4   & 0.6453 & \textbf{0.7198} & $\best{1.12\times}$ & $\best{0}$ \textbf{(exact)} & $0.188$ nats/token \\
+8   & 0.4018 & \textbf{0.4728} & $\best{1.18\times}$ & $\best{0}$ \textbf{(exact)} & $0.321$ nats/token \\
+16  & 0.1779 & \textbf{0.2507} & $\best{1.41\times}$ & $\best{0}$ \textbf{(exact)} & $0.613$ nats/token \\
+32  & 0.0722 & \textbf{0.1084} & $\best{1.50\times}$ & $\best{0}$ \textbf{(exact)} & $0.390$ nats/token \\
+64  & 0.0176 & \textbf{0.0459} & $\best{2.61\times}$ & $\best{0}$ \textbf{(exact)} & $0.366$ nats/token \\
+128 & 0.0036 & \textbf{0.0208} & $\best{5.72\times}$ & $\best{0}$ \textbf{(exact)} & $0.739$ nats/token \\
 \bottomrule
 \end{tabular}
-\caption{Distillation moves the frontier. Exact verification is lossless at every stage, so the
-acceptance gain is free (\textbf{bold}). The last column is what the projection frontier would have to
-spend in excess NLL to reach the same acceptance, interpolated from the measured curve: distillation
-buys that acceptance for nothing, which no verification rule in
-Table~\ref{tab:collapse} can do.}
+\caption{Distillation moves the frontier, and the gain \emph{grows} with the token dimension. Exact
+verification is lossless at every stage, so the acceptance gain is free (\textbf{bold}). The last
+column is what the projection frontier would have to spend in excess NLL to reach the same
+acceptance, interpolated from the measured curve: distillation buys that acceptance for nothing,
+which no verification rule in Table~\ref{tab:collapse} can do. $10{,}000$ distillation steps per
+dimension, five measurement stages.}
 \label{tab:e14}
 \end{table}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.72\textwidth]{figures/e14_alignment.png}
-\caption{\textbf{Projection slides along the frontier; distillation moves it.} The blue curve is the
-projection frontier of the undistilled pair, and to gain acceptance one must climb it, paying excess
-NLL. The stars are exact verification after successive rounds of distillation: they advance
-\emph{rightwards along zero}, gaining acceptance at no fidelity cost, which is a direction the
-frontier does not offer. This is the constructive content of Corollary~\ref{cor:frontier}: the curve
-is a property of the model pair, so only changing the pair can move it.}
+\includegraphics[width=0.86\textwidth]{figures/e14_alignment_gpu_headline.png}
+\caption{\textbf{Projection slides along the frontier; distillation moves it.} \textbf{Left:} at
+$\dd{=}128$, the blue curve is the projection frontier of the undistilled pair, and to gain
+acceptance one must climb it, paying excess NLL. The stars are exact verification after successive
+rounds of distillation: they advance \emph{rightwards along zero}, gaining acceptance at no fidelity
+cost, which is a direction the frontier does not offer. The arrow marks the $0.74$ nats the frontier
+charges for the rate distillation reached for free. \textbf{Right:} the gain is not a fixed bonus.
+It grows monotonically with $\dd$, from $1.12\times$ to $\best{5.72\times}$, so the one intervention
+that works helps most exactly where the collapse of \S\ref{sec:collapse} bites hardest. This is the
+constructive content of Corollary~\ref{cor:frontier}: the curve is a property of the model pair, so
+only changing the pair can move it.}
 \label{fig:moving}
 \end{figure}
 
-Table~\ref{tab:e14} and Figure~\ref{fig:moving} show the effect after $1{,}800$ distillation steps. Acceptance rises
-$\best{1.13\times}$ at $\dd{=}16$ and $\best{1.34\times}$ at $\dd{=}64$ while the rule remains exact and therefore
-lossless by construction; the measured excess NLL stays at zero within error throughout. Reaching
-the same acceptance by projection would cost $0.179$ and $0.061$ nats per token respectively. The
-gains are modest in absolute terms, and we do not present them as a competitive speedup; the point is
-the mechanism. Distillation is the one intervention we tested that changes the curve rather than the
-position on it, which is what the conservation law predicts and what the five subspace rules could
-not do.
+Table~\ref{tab:e14} and Figure~\ref{fig:moving} show the effect after $10{,}000$ distillation steps at
+each of six token dimensions. Acceptance rises at every one while the rule stays exact and therefore
+lossless: the measured excess NLL sits within $1.2$ standard errors of zero throughout, and the
+residual sampler converges on every rejection. The same acceptance by projection would cost $0.19$ to
+$0.74$ nats per token.
 
-We note that the effect is smaller at $\dd{=}16$ than the $\sqrt{\dd}$ analysis might suggest and that
-$1{,}800$ steps is a small budget. This is consistent with the same collapse: reducing $\|\delta\|$
-enough to move $M = \delta\sqrt{\dd}$ appreciably becomes harder as $\dd$ grows, which is a further
-statement of the difficulty rather than a way around it.
+The dimensional trend is the result we did not anticipate. The gain is not a fixed bonus that the
+collapse eventually swamps; it \emph{grows} monotonically with $\dd$, from $\best{1.12\times}$ at
+$\dd{=}4$ to $\best{5.72\times}$ at $\dd{=}128$. The conservation law explains why. Acceptance is
+$2 - 2\Phi(M/2)$ with $M = \delta\sqrt{\dd}$, and at large $M$ this Gaussian tail is exponentially
+sensitive to $M$, so the same proportional reduction in $\delta$ that buys a few percent at $\dd{=}4$
+buys a multiple at $\dd{=}128$. The collapse that makes speculative sampling fail in high dimension
+is the very thing that makes shrinking the divergence pay there, and projection cannot exploit it,
+because Corollary~\ref{cor:frontier} confines it to a curve that $\delta$ pins in place.
+
+The absolute rates remain low, and we claim no wall-clock speedup: $0.0208$ at $\dd{=}128$ still
+saves little. The claim is about direction. Distillation is the one intervention we tested that
+changes the curve rather than the position on it, and its advantage widens with exactly the
+parameter that defeats everything else.
 
 \section{The Published Criterion Is Applied Inverted}
 \label{sec:cspd}
@@ -523,19 +545,22 @@ good an approximation rather than assuming it. The five subspace rules are linea
 construction, because a linear statistic keeps the pushforward Gaussian and the projected test exact;
 a nonlinear statistic escapes Proposition~\ref{prop:rowspace} and is not covered by our result, though
 it also loses the exactness that makes projected verification attractive. Finally, the distillation
-result in \S\ref{sec:moving} is a mechanism demonstration at a small step budget, not a tuned system.
+result in \S\ref{sec:moving} is a mechanism demonstration, not a tuned system: $10{,}000$ steps per
+dimension is enough to establish the direction and the dimensional trend, but the absolute acceptance
+at $\dd{=}128$ remains too low to be practically useful, and we do not know where the trend saturates.
 
 \section{Conclusion}
 
-Speculative sampling in continuous token spaces fails for a reason that is structural rather than
-incidental: acceptance decays as a Gaussian tail in $\sqrt{\dd}$, and we measure a $181\times$
-collapse over a $32\times$ range of dimension with the per-coordinate disagreement held flat. The
-natural repair, verifying a well-chosen low-dimensional statistic, cannot work, because the divergence
-a statistic can see and the divergence that escapes it are two halves of a conserved budget. We prove
-this for the tractable case and confirm it on real models across five subspace rules whose costs span
-$26$ nats and which nonetheless collapse onto one curve to within $5.2\%$, with an adversarial
-anti-control ranking best at several points. What remains is to change the budget itself. Distillation
-does so, buying acceptance that projection can only rent.
+Speculative sampling in continuous token spaces fails for a structural reason: acceptance decays as a
+Gaussian tail in $\sqrt{\dd}$, and we measure a $181\times$ collapse over a $32\times$ range of
+dimension with the per-coordinate disagreement held flat. The natural repair, verifying a well-chosen
+low-dimensional statistic, cannot work, because the divergence a statistic sees and the divergence
+that escapes it are two halves of a conserved budget. We prove this for the tractable case and
+confirm it across six dimensions and five subspace rules whose costs span $48$ nats yet collapse onto
+one curve to within $\best{4.0\%}$, with an adversarial anti-control ranking best at the largest
+dimensions. What remains is to change the budget. Distillation does so, buying acceptance that
+projection can only rent, and more of it the higher the dimension goes: $\best{5.72\times}$ free at
+$\dd{=}128$.
 
 \bibliographystyle{plainnat}
 \bibliography{references}

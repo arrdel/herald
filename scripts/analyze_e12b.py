@@ -109,11 +109,18 @@ def plot(results: list[dict], path: Path, metrics=METRICS) -> Path:
             collapse is tightest and a single row fits the page budget; the appendix uses both.
     """
     n = len(results)
-    fig, axes = plt.subplots(len(metrics), n, figsize=(5.8 * n, 4.6 * len(metrics)), squeeze=False)
+    # Beyond three panels a single row is too wide to be legible once scaled to the text block, so
+    # wrap into a grid and stack each metric's rows underneath one another.
+    ncols = min(3, n)
+    blocks = -(-n // ncols)
+    fig, axes = plt.subplots(len(metrics) * blocks, ncols,
+                             figsize=(5.8 * ncols, 4.6 * len(metrics) * blocks), squeeze=False)
+    for ax in (axes[len(metrics) * blocks - 1][i] for i in range(n % ncols or ncols, ncols)):
+        ax.set_visible(False)
 
     for col, r in enumerate(results):
         for row_idx, (key, label) in enumerate(metrics):
-            ax = axes[row_idx][col]
+            ax = axes[(col // ncols) * len(metrics) + row_idx][col % ncols]
             for rule in RULES:
                 pts = sorted((row["acceptance"], row[key]) for row in r["rows"]
                              if row["rule"] == rule)
@@ -146,12 +153,18 @@ def main() -> None:
     ap.add_argument("--figure", default="docs/figures/e12b_collapse.png")
     ap.add_argument("--compact-figure", default="docs/figures/e12b_collapse_compact.png",
                     help="single-row version, excess NLL only, for the page-limited main text")
+    ap.add_argument("--compact-dims", type=int, nargs="+", default=None,
+                    help="dimensions to draw in the compact figure; all of them by default. Six "
+                         "panels do not survive being scaled to the text width, so the main text "
+                         "shows the largest few and the appendix carries the rest.")
     args = ap.parse_args()
 
     results = json.loads(Path(args.results).read_text())["results"]
     print("\n".join(summarize(results)))
     print(f"\nwrote {plot(results, Path(args.figure))}")
-    print(f"wrote {plot(results, Path(args.compact_figure), metrics=METRICS[:1])}")
+    compact = results if args.compact_dims is None else \
+        [r for r in results if r["d"] in set(args.compact_dims)]
+    print(f"wrote {plot(compact, Path(args.compact_figure), metrics=METRICS[:1])}")
 
 
 if __name__ == "__main__":

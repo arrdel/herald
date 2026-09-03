@@ -797,3 +797,56 @@ test including the anti-control, the metric that had to be replaced, distillatio
 works, and the corrected CSpD criterion. The negative result is the contribution; the falsifiers are
 stated explicitly in an appendix, including the one that *fired* during the work (squared error was
 gameable, and the anti-control exposed it).
+
+---
+
+## 2026-09-03 — E1.2b-gpu / E1.4-gpu — scaled sweeps on ai-lab2, and the trend that reversed a caveat
+
+**Ran:** both experiments re-run on an RTX 4090 (`adelechinda@ai-lab2`) at roughly 5× the CPU budget:
+E1.2b over `d ∈ {4,8,16,32,64,128}` × 5 rules (1,346 s), E1.4 over the same six dimensions at 10,000
+distillation steps each, five measurement stages (5,377 s). Both wrote `results.json` and then died
+in their plotting call — the host's conda env is Python 3.9 and `zip(strict=)` needs 3.10+. No data
+was lost; figures were regenerated locally with `--plot-only`.
+
+**Result — conservation (E1.2b):** the collapse holds across a 32× range of `d`, and *tightens*:
+
+| d | cost range (nats) | median dev | max dev | max as % of range |
+|---|---|---|---|---|
+| 4 | 0.240 | 0.027 | 0.038 | 15.9% |
+| 8 | 1.560 | 0.017 | 0.112 | 7.2% |
+| 16 | 5.768 | 0.050 | 0.356 | 6.2% |
+| 32 | 11.341 | 0.331 | 0.950 | 8.4% |
+| 64 | 26.305 | 0.616 | 1.476 | 5.6% |
+| 128 | 48.016 | 0.777 | 1.933 | **4.0%** |
+
+The d=16 and d=64 rows replicate the CPU run to within 0.06 nats and 0.6 percentage points, which is
+an independent confirmation on different hardware and a different RNG stream. The anti-control now
+ranks *best* at the three largest dimensions, and at d=128, k=16 the rules span a 30× acceptance
+range (0.018 pca to 0.550 anti-control) while still tracing one curve.
+
+**Result — distillation (E1.4):** the gain grows monotonically with dimension.
+
+| d | before | after 10,000 steps | gain | projection cost for the same rate |
+|---|---|---|---|---|
+| 4 | 0.6453 | 0.7198 | 1.12× | 0.188 nats/token |
+| 8 | 0.4018 | 0.4728 | 1.18× | 0.321 |
+| 16 | 0.1779 | 0.2507 | 1.41× | 0.613 |
+| 32 | 0.0722 | 0.1084 | 1.50× | 0.390 |
+| 64 | 0.0176 | 0.0459 | 2.61× | 0.366 |
+| 128 | 0.0036 | 0.0208 | **5.72×** | 0.739 |
+
+Exact anchors are within 1.2 SEM of zero at every `d`, residual convergence 100% throughout.
+
+**Reading:** this reverses the caveat written after the CPU run. That run saw a smaller effect at
+d=16 than at d=64 and read it as "moving `M = δ√d` gets harder as `d` grows". With six dimensions and
+a 5× budget the trend is unambiguous and points the other way: acceptance is `2 − 2Φ(M/2)`, a
+Gaussian tail that is exponentially sensitive to `M` once `M` is large, so a fixed proportional
+shrink of `δ` buys a few percent at d=4 and a multiple at d=128. The collapse that defeats
+speculative sampling is the same thing that makes closing the pair pay. Projection cannot follow,
+because Corollary 1 pins it to a curve that `δ` fixes. The earlier reading was under-powered, not
+wrong about the mechanism.
+
+**Changes:** paper updated throughout to the six-dimension sweep — `tab:collapse` restructured to one
+row per dimension, `tab:e14` to six rows, a new right-hand panel showing gain against `d`, and the
+`√d`-difficulty caveat in §5 replaced by the trend. Appendix tables are now generated from
+`results.json` rather than transcribed. Main text stays at 9 pages; appendix 11.
