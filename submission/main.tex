@@ -4,6 +4,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsthm}
+\usepackage{bm}
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{xcolor}
@@ -19,8 +20,10 @@
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\dd}{d}
 \newcommand{\kk}{k}
+% Marks a headline result. \bm rather than \mathbf so that operators such as \times bold too.
+\newcommand{\best}[1]{\bm{#1}}
 
-\title{Acceptance Is a Conserved Quantity:\\ Why Projected Verification Cannot Rescue\\ Speculative Sampling in Continuous Token Spaces}
+\title{Acceptance Is Conserved in Continuous Speculative Sampling}
 
 \author{Anonymous}
 
@@ -30,26 +33,28 @@
 
 \begin{abstract}
 Speculative sampling accelerates autoregressive generation by drafting tokens cheaply and verifying
-them exactly. Continuous-token generative models---diffusion autoregressors, masked autoregressive
-image models, and their signal-processing analogues---appear to be natural beneficiaries, but the
+them exactly. Continuous-token generative models (diffusion autoregressors, masked autoregressive
+image models, and their signal-processing analogues) appear to be natural beneficiaries, but the
 exact acceptance rule degrades catastrophically as the token dimension grows. We measure this
 collapse directly: over a controlled sweep in which only the latent dimension changes, acceptance
-falls $181\times$ from $\dd{=}4$ to $\dd{=}128$, and the effective separation grows as $\dd^{0.52}$,
+falls $\best{181\times}$ from $\dd{=}4$ to $\dd{=}128$, and the effective separation grows as $\dd^{0.52}$,
 matching the $\sqrt{\dd}$ law for Gaussians to within measurement error. The obvious remedy is to
 verify a lower-dimensional statistic of the token rather than the token itself. We show this cannot
 work. For distributions that factorise across an orthonormal basis, the draft--target divergence
 splits into a verified part that suppresses acceptance and an unverified part that leaks into the
 output, and orthonormality forces their sum to be constant. Acceptance and fidelity are two readings
 of one conserved budget, so every choice of verified subspace merely selects a point on a single
-curve fixed by the model pair. We test the prediction against five subspace rules---random,
+curve fixed by the model pair. We test the prediction against five subspace rules: random,
 principal-component, decoder-Jacobian, low-frequency DCT band, and an adversarial anti-control that
 verifies the least important directions. Their costs span $26$ nats, yet at matched acceptance every
-rule lies within $5.2\%$ of the range of one curve, and the anti-control ranks best at several
+rule lies within $\best{5.2\%}$ of the range of one curve, and the anti-control ranks best at several
 points, which is what a noise ordering looks like. The corollary is constructive: the only lever is
 the divergence itself. Distilling the draft towards the target moves the frontier rather than
-sliding along it, raising lossless acceptance by $1.34\times$ at $\dd{=}64$. Finally, we show that a
+sliding along it, raising lossless acceptance by $\best{1.34\times}$ at $\dd{=}64$
+\textbf{at zero fidelity cost}, an acceptance gain that the best projection rule can buy only by
+leaking $0.061$ nats per token. Finally, we show that a
 published continuous speculative decoder applies its trajectory normalisation inverted, making its
-acceptance ratio wrong by the square of a factor we bound at $e^{161}$.
+acceptance ratio wrong by the square of a factor we bound at $\best{e^{161}}$.
 \end{abstract}
 
 \section{Introduction}
@@ -83,7 +88,7 @@ of engineering a better drafter.
 The natural response, and the one the literature gestures towards, is to stop verifying the token and
 start verifying a \emph{statistic} of it. If $A \in \R^{\kk \times \dd}$ with $\kk \ll \dd$, then
 accepting on $Ax$ rather than $x$ restores a low-dimensional problem, and one can hope that a
-well-chosen $A$---one aligned with perceptually or semantically important directions---retains what
+well-chosen $A$, one aligned with perceptually or semantically important directions, retains what
 matters and discards only what does not. This is intuitive, it is what dimension reduction does
 everywhere else, and it is wrong.
 
@@ -104,20 +109,21 @@ confirm this on real models across five subspace rules including an adversarial 
 spanning $26$ nats collapse to within $5.2\%$ of a single curve.
 
 \item \textbf{A fidelity metric that cannot be gamed} (\S\ref{sec:metric}). Signal-domain squared
-error against ground truth---the obvious choice---rewards variance shrinkage, and under it every
+error against ground truth, the obvious choice, rewards variance shrinkage, and under it every
 relaxed rule scores \emph{negative} excess distortion while the anti-control looks best. We report
 this failure and replace the metric with a signal-domain energy distance that is zero exactly when
 the decoded distributions agree and is increased by mode collapse.
 
 \item \textbf{The lever that does work} (\S\ref{sec:moving}). Because the frontier is a property of
 the model pair, the only way to improve it is to shrink the divergence. Mode-covering distillation of
-the draft raises lossless acceptance by $1.13\times$ at $\dd{=}16$ and $1.34\times$ at $\dd{=}64$,
-reaching rates that projection can only buy by spending fidelity.
+the draft raises lossless acceptance by $\best{1.13\times}$ at $\dd{=}16$ and $\best{1.34\times}$ at
+$\dd{=}64$, reaching \textbf{at zero fidelity cost} rates that projection can buy only by spending
+$0.179$ and $0.061$ nats per token.
 
 \item \textbf{A correction to a published criterion} (\S\ref{sec:cspd}). Continuous speculative
 decoding \citep{wang2025continuous} multiplies its acceptance ratio by an accumulated-variance factor
 that is the \emph{reciprocal} of the trajectory normaliser its own derivation requires. The ratio is
-therefore wrong by the square of that factor, whose exponent we bound at $161.5$.
+therefore wrong by the square of that factor, whose exponent we bound at $\best{161.5}$.
 \end{itemize}
 
 We work in a one-dimensional signal domain rather than on images. This is deliberate and is the only
@@ -139,8 +145,8 @@ $r \propto (p - q)_+$. The emitted density is then
 \end{equation}
 and a short calculation gives $\tilde{p} = p$ exactly. We rely on this identity throughout as an
 \emph{anchor}: any correct implementation must score exact verification as lossless, and we report
-that measurement for every metric we introduce. Implementing rejection as a fresh draw from $p$---the
-one-line simplification---breaks the identity and would make every downstream number a measurement of
+that measurement for every metric we introduce. Implementing rejection as a fresh draw from $p$, the
+one-line simplification, breaks the identity and would make every downstream number a measurement of
 the harness rather than of the rule.
 
 \paragraph{Models.} We use a masked autoregressive model over continuous tokens, the one-dimensional
@@ -157,8 +163,8 @@ acceptance varies with token dimension. Image pipelines cannot test it: KL16, th
 MAR and its descendants, emits $\dd = 16$ and nothing else, so an image experiment yields one point on
 the curve we need. Here $\dd$ is a constructor argument, and we retrain the tokenizer and both models
 at each value, holding data, architecture shape, optimiser, and step budget fixed. Everything else in
-the pipeline---patchwise tokenization, masked autoregressive prediction over continuous latents, a
-learned decoder back to the signal---mirrors the image setting, including the transform-domain
+the pipeline (patchwise tokenization, masked autoregressive prediction over continuous latents, a
+learned decoder back to the signal) mirrors the image setting, including the transform-domain
 structure we exploit in \S\ref{sec:conservation}.
 
 \section{The Dimensional Collapse}
@@ -210,11 +216,11 @@ over that range, purely because the disagreement is accumulated over more coordi
 
 \paragraph{Ruling out the training confound.} A fixed step budget could make high-$\dd$ models simply
 less converged. We reject this two ways. First, convergence traces at $\dd \in \{16, 128\}$ show both
-plateau well inside the budget---$\dd{=}16$ by $\sim$$750$ steps and $\dd{=}128$ by $\sim$$500$---and
+plateau well inside the budget ($\dd{=}16$ by $\sim$$750$ steps and $\dd{=}128$ by $\sim$$500$), and
 past $4{,}000$ steps acceptance continues to \emph{fall}, because validation loss turns over and the
 two models overfit apart rather than together. Second, and more directly, comparing checkpoints
-\emph{matched on $\delta$}---pairs from independent budgets that happen to reach identical
-per-coordinate agreement---still shows a $\sim$$60\times$ acceptance penalty from $\dd{=}16$ to
+\emph{matched on $\delta$}, pairs from independent budgets that happen to reach identical
+per-coordinate agreement, still shows a $\sim$$60\times$ acceptance penalty from $\dd{=}16$ to
 $\dd{=}128$ (median over $15$ pairs). At identical per-coordinate agreement, dimension alone costs a
 factor of $60$. Appendix~\ref{app:convergence} gives the traces.
 
@@ -229,7 +235,7 @@ the pushforward is again a Gaussian mixture, with means $A\mu$ and \emph{full} c
 $A \operatorname{diag}(\sigma^2) A^\top$; we compute these exactly rather than approximating them.
 
 Two facts make the comparison across rules well posed. First, when $\kk = \dd$ the map is a bijection
-with unit Jacobian and the projected ratio equals the exact one identically---a property we use as a
+with unit Jacobian and the projected ratio equals the exact one identically, a property we use as a
 correctness test. Second, and more useful:
 
 \begin{proposition}[Row-space invariance]
@@ -243,8 +249,8 @@ An acceptance rule of this form is therefore not a matrix but a \emph{choice of 
 subspace}, and rules that pick the same subspace by different constructions are the same rule.
 
 Before asking which subspace is best, one must ask whether the choice matters at all. Any dimension
-reduction raises acceptance for free reasons---this is precisely the $h^\dd$ scaling that
-\citet{fearnhead2012constructing} identify in ABC---so a structureless projection is the mandatory
+reduction raises acceptance for free reasons (this is precisely the $h^\dd$ scaling that
+\citet{fearnhead2012constructing} identify in ABC), so a structureless projection is the mandatory
 null control. Measuring random subspaces across the full sweep, acceptance turns out to be a function
 of the verified dimension $\kk$ \emph{alone}: at $\kk = 4$ the mean rate is $0.624$ across
 $\dd \in \{4,\dots,128\}$ with a coefficient of variation of $2.5\%$, and across
@@ -301,15 +307,15 @@ Proposition~\ref{prop:rowspace}:
 
 \begin{itemize}
 \itemsep1pt
-\item \textbf{random} --- uniform on the Stiefel manifold. The null control.
-\item \textbf{pca} --- top-$\kk$ principal directions of the token distribution. Knows the data.
-\item \textbf{signal-top} --- top-$\kk$ eigenvectors of $\E[J^\top J]$ for the decoder Jacobian $J$:
+\item \textbf{random}: uniform on the Stiefel manifold. The null control.
+\item \textbf{pca}: top-$\kk$ principal directions of the token distribution. Knows the data.
+\item \textbf{signal-top}: top-$\kk$ eigenvectors of $\E[J^\top J]$ for the decoder Jacobian $J$:
 the latent directions that move the reconstructed waveform most. Knows the decoder.
-\item \textbf{dct-low} --- the same restricted to the low-frequency DCT band of the decoded patch,
+\item \textbf{dct-low}: the same restricted to the low-frequency DCT band of the decoded patch,
 i.e.\ the top eigenvectors of $\E[J^\top C^\top C J]$ for a band selector $C$. This is a genuine
 transform-domain statistic, made linear by composing the DCT with the Jacobian so the pushforward
 stays exactly Gaussian and the test stays exact with respect to the statistic.
-\item \textbf{signal-bottom} --- the adversarial anti-control: verify the directions that matter
+\item \textbf{signal-bottom}: the adversarial anti-control: verify the directions that matter
 \emph{least}. If the choice of subspace matters at all, this must be clearly worst.
 \end{itemize}
 
@@ -343,11 +349,11 @@ $-0.026$ in energy distance, with the residual sampler converging on $100.0\%$ o
 \cmidrule(lr){3-4}\cmidrule(lr){5-6}
 $\dd$ & quantity & value & vs.\ range & value & vs.\ range \\
 \midrule
-16 & range spanned by the five rules & 5.812 & --- & 1.727 & --- \\
+16 & range spanned by the five rules & 5.812 & n/a & 1.727 & n/a \\
 16 & median deviation from one curve & 0.077 & 1.3\% & 0.085 & 4.9\% \\
 16 & \textbf{max} deviation from one curve & \textbf{0.357} & \textbf{6.1\%} & \textbf{0.350} & \textbf{20.3\%} \\
 \midrule
-64 & range spanned by the five rules & 26.325 & --- & 1.396 & --- \\
+64 & range spanned by the five rules & 26.325 & n/a & 1.396 & n/a \\
 64 & median deviation from one curve & 0.773 & 2.9\% & 0.051 & 3.7\% \\
 64 & \textbf{max} deviation from one curve & \textbf{1.366} & \textbf{5.2\%} & \textbf{0.282} & \textbf{20.2\%} \\
 \bottomrule
@@ -384,8 +390,8 @@ the anti-control ranks as the \emph{best} rule at several acceptances ($1.26$ na
 curve at $\dd{=}64$, $\kk{=}8$) and the decoder-Jacobian rule as the worst ($1.37$ nats above at
 $\kk{=}2$). A rule designed to be maximally stupid is indistinguishable from one designed with full
 knowledge of the decoder, once acceptance is held fixed. Second, the rules differ enormously at
-matched $\kk$---at $\dd{=}64, \kk{=}4$ acceptance ranges from $0.14$ (pca) to $0.79$ (anti-control),
-a $5.6\times$ spread---so they are genuinely different rules that happen to land on the same curve.
+matched $\kk$: at $\dd{=}64, \kk{=}4$ acceptance ranges from $0.14$ (pca) to $0.79$ (anti-control),
+a $5.6\times$ spread, so they are genuinely different rules that happen to land on the same curve.
 This also refines the null control's finding: acceptance depends on $\kk$ alone for \emph{random}
 subspaces, which are exchangeable by rotational symmetry, but a structured subspace can deliberately
 sit where $p$ and $q$ agree and buy a much higher rate. It gains nothing by doing so.
@@ -411,13 +417,15 @@ wherever the target does, which is exactly what acceptance is sensitive to.
 \toprule
 $\dd$ & acceptance before & acceptance after & gain & fidelity cost & projection cost for same rate \\
 \midrule
-16 & 0.1744 & 0.1979 & $1.13\times$ & $0$ (exact) & $0.179$ nats/token \\
-64 & 0.0182 & 0.0245 & $1.34\times$ & $0$ (exact) & $0.061$ nats/token \\
+16 & 0.1744 & \textbf{0.1979} & $\best{1.13\times}$ & $\best{0}$ \textbf{(exact)} & $0.179$ nats/token \\
+64 & 0.0182 & \textbf{0.0245} & $\best{1.34\times}$ & $\best{0}$ \textbf{(exact)} & $0.061$ nats/token \\
 \bottomrule
 \end{tabular}
 \caption{Distillation moves the frontier. Exact verification is lossless at every stage, so the
-acceptance gain is free. The last column is what the projection frontier would have to spend in excess
-NLL to reach the same acceptance, interpolated from the measured curve.}
+acceptance gain is free (\textbf{bold}). The last column is what the projection frontier would have to
+spend in excess NLL to reach the same acceptance, interpolated from the measured curve: distillation
+buys that acceptance for nothing, which no verification rule in
+Table~\ref{tab:collapse} can do.}
 \label{tab:e14}
 \end{table}
 
@@ -425,7 +433,7 @@ NLL to reach the same acceptance, interpolated from the measured curve.}
 \centering
 \includegraphics[width=0.72\textwidth]{figures/e14_alignment.png}
 \caption{\textbf{Projection slides along the frontier; distillation moves it.} The blue curve is the
-projection frontier of the undistilled pair---to gain acceptance one must climb it, paying excess
+projection frontier of the undistilled pair, and to gain acceptance one must climb it, paying excess
 NLL. The stars are exact verification after successive rounds of distillation: they advance
 \emph{rightwards along zero}, gaining acceptance at no fidelity cost, which is a direction the
 frontier does not offer. This is the constructive content of Corollary~\ref{cor:frontier}: the curve
@@ -434,8 +442,8 @@ is a property of the model pair, so only changing the pair can move it.}
 \end{figure}
 
 Table~\ref{tab:e14} and Figure~\ref{fig:moving} show the effect after $1{,}800$ distillation steps. Acceptance rises
-$1.13\times$ at $\dd{=}16$ and $1.34\times$ at $\dd{=}64$ while the rule remains exact and therefore
-lossless by construction---the measured excess NLL stays at zero within error throughout. Reaching
+$\best{1.13\times}$ at $\dd{=}16$ and $\best{1.34\times}$ at $\dd{=}64$ while the rule remains exact and therefore
+lossless by construction; the measured excess NLL stays at zero within error throughout. Reaching
 the same acceptance by projection would cost $0.179$ and $0.061$ nats per token respectively. The
 gains are modest in absolute terms, and we do not present them as a competitive speedup; the point is
 the mechanism. Distillation is the one intervention we tested that changes the curve rather than the
@@ -463,12 +471,12 @@ $\prod_t (\sigma_{q,t} / \sigma_{p,t})$. The shipped code accumulates $\sum_t \l
 model and multiplies by $\exp\bigl(\sum_t \log\sigma_p - \sum_t \log\sigma_q\bigr)$, which is
 $\prod_t (\sigma_{p,t} / \sigma_{q,t})$: the reciprocal.
 
-The factor therefore belongs---an earlier version of this analysis claimed it did not, and an
+The factor therefore belongs (an earlier version of this analysis claimed it did not, and an
 independent derivation \citep{zhang2025fastardiff} presents it as part of the correct
-criterion---but it is applied upside down. The consequence is that the ratio is wrong by the
+criterion), but it is applied upside down. The consequence is that the ratio is wrong by the
 \emph{square} of the factor, so every error exponent doubles. Bounding the accumulated variance
-mismatch over the sampler's schedule gives a worst-case exponent of $161.5$; at an assumed $5\%$
-per-step variance gap the ratio is wrong by roughly $3{,}200\times$. Since an exponent of $0.693$
+mismatch over the sampler's schedule gives a worst-case exponent of $\best{161.5}$; at an assumed $5\%$
+per-step variance gap the ratio is wrong by roughly $\best{3{,}200\times}$. Since an exponent of $0.693$
 suffices to double the acceptance rate, the criterion saturates $\min\{1, \cdot\}$ for most tokens and
 accepts nearly everything, which would explain a reported speedup without a corresponding fidelity
 audit. Two details identify this as a sign slip rather than a modelling choice: the same normaliser
@@ -481,8 +489,8 @@ Appendix~\ref{app:cspd} gives the derivation, the code references, and the bound
 
 \paragraph{Speculative decoding.} \citet{leviathan2023fast} and \citet{chen2023accelerating}
 introduced the exact scheme and its $1 - \TV$ acceptance guarantee. Subsequent work has focused on
-better drafters---self-speculation, tree attention, and trained draft heads
-\citep{cai2024medusa,li2024eagle}---all of which operate on discrete vocabularies where the
+better drafters such as self-speculation, tree attention, and trained draft heads
+\citep{cai2024medusa,li2024eagle}, all of which operate on discrete vocabularies where the
 dimensional collapse we study does not arise. Our conservation result explains why that literature's
 central lever (improving the drafter) is the right one and why the continuous analogue of its other
 lever (relaxing the acceptance test) is not.
@@ -506,7 +514,7 @@ control of \S\ref{sec:conservation} is mandatory rather than optional.
 \label{sec:limits}
 
 Our experiments are in a one-dimensional signal domain, not on images. This buys the only thing that
-makes the central measurement possible---a token dimension that can be varied---at the cost of direct
+makes the central measurement possible, a token dimension that can be varied, at the cost of direct
 comparability to published image speedups. We report no FID and claim no wall-clock speedup; the
 quantities we measure are acceptance rates and distributional fidelity, which are the quantities the
 conservation law concerns. Proposition~\ref{prop:conservation} is exact only for shared-covariance
@@ -522,7 +530,7 @@ result in \S\ref{sec:moving} is a mechanism demonstration at a small step budget
 Speculative sampling in continuous token spaces fails for a reason that is structural rather than
 incidental: acceptance decays as a Gaussian tail in $\sqrt{\dd}$, and we measure a $181\times$
 collapse over a $32\times$ range of dimension with the per-coordinate disagreement held flat. The
-natural repair---verify a well-chosen low-dimensional statistic---cannot work, because the divergence
+natural repair, verifying a well-chosen low-dimensional statistic, cannot work, because the divergence
 a statistic can see and the divergence that escapes it are two halves of a conserved budget. We prove
 this for the tractable case and confirm it on real models across five subspace rules whose costs span
 $26$ nats and which nonetheless collapse onto one curve to within $5.2\%$, with an adversarial

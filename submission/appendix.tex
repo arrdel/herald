@@ -26,8 +26,8 @@ because $\min\{a,b\} + (a - b)_+ = a$ pointwise. Hence exact verification with a
 sampler emits the target \emph{exactly}, and any measurement of its fidelity must return zero up to
 Monte Carlo error.
 
-This is why we implement the residual by rejection---proposing $y \sim p$ and accepting with
-probability $(1 - q(y)/p(y))_+$, which targets $(p-q)_+/Z$---rather than by resampling from $p$.
+This is why we implement the residual by rejection, proposing $y \sim p$ and accepting with
+probability $(1 - q(y)/p(y))_+$, which targets $(p-q)_+/Z$, rather than by resampling from $p$.
 Resampling from $p$ gives $\tilde p = q\alpha + (1-\bar A)p \ne p$, so exact verification would score
 as \emph{lossy} and every relative fidelity number in \S\ref{sec:conservation} would be measuring the
 harness rather than the rule. We report the residual sampler's convergence rate alongside every
@@ -54,7 +54,7 @@ acceptance behaviour, so an acceptance rule of this family is a choice of subspa
 therefore be reduced to an orthonormal basis without changing anything, which is what makes the
 comparison in Table~\ref{tab:collapse} like for like. When $\kk = \dd$ and $A$ is invertible the same
 argument gives $p_A/q_A = p/q$, so full-rank projected verification reproduces exact verification
-identically---the correctness test we apply to every projection implementation.
+identically, which is the correctness test we apply to every projection implementation.
 
 \subsection{Proof of Proposition~\ref{prop:conservation} (conservation)}
 
@@ -154,7 +154,7 @@ accumulator holds $\sum \log \sigma$ and not $\sum\log\sigma^2$; and the accumul
 sampler's full schedule, so $T$ is the number of denoising steps, not one.
 
 Comparing Eq.~\ref{eq:correct-factor} and Eq.~\ref{eq:shipped-factor}, the shipped factor is the
-\emph{reciprocal} of the required one. It is not a spurious term---an independent derivation
+\emph{reciprocal} of the required one. It is not a spurious term: an independent derivation
 \citep{zhang2025fastardiff} presents the same normaliser as part of the correct criterion, and our
 analysis agrees that it belongs. It is applied upside down.
 
@@ -197,7 +197,7 @@ inconsistent with the expression it sits inside.
 
 We note that our own earlier analysis of this criterion claimed the accumulated factor had no place in
 the ratio at all. That claim was wrong, and reading \citet{zhang2025fastardiff} against the source is
-what corrected it. The resulting claim is weaker---the term belongs, and is inverted---and far more
+what corrected it. The resulting claim is weaker, since the term belongs and is merely inverted, and far more
 defensible, with an independent derivation supporting the form.
 
 \section{Experimental Setup}
@@ -249,8 +249,8 @@ measurement: an earlier version seeded only the mask, and because \texttt{Mixtur
 accepts no generator the token draw silently followed ambient global state, making measurements
 irreproducible at the third decimal place.
 
-\paragraph{Compute.} Every experiment in this paper runs on CPU. The models are small by design---the
-target has fewer than a million parameters---because the claims concern the token dimension and the
+\paragraph{Compute.} Every experiment in this paper runs on CPU. The models are small by design, with the
+target under a million parameters, because the claims concern the token dimension and the
 draft/target divergence, neither of which requires scale to exhibit. The full ladder reruns in under
 an hour on eight threads.
 
@@ -284,7 +284,7 @@ trajectory that does not exist.}
 \paragraph{Matched-$\delta$ comparison.} The sharper control dispenses with step counts entirely.
 Across the checkpoint grid we find pairs at $\dd{=}16$ and $\dd{=}128$ whose measured per-coordinate
 gap $\delta$ is equal, and compare their acceptance rates directly. At identical per-coordinate
-agreement the $\dd{=}128$ models accept roughly $60\times$ less often---a median of $62\times$ over
+agreement the $\dd{=}128$ models accept roughly $60\times$ less often: a median of $62\times$ over
 $15$ matched pairs at the $4{,}000$-step budget and $64\times$ over $7$ pairs at $16{,}000$. Since
 $\delta$ is held fixed by construction, the residual factor is attributable to dimension alone.
 
@@ -303,7 +303,7 @@ of $A$ per cell, as a function of the verified dimension $\kk$ across all six to
 $\kk$ & 1 & 2 & 4 & 8 & 16 & 32 & 64 & 128 \\
 \midrule
 mean acceptance over $\dd$ & 0.8786 & 0.7846 & 0.6244 & 0.4102 & 0.2093 & 0.0774 & 0.0205 & 0.0035 \\
-coefficient of variation & 1.3\% & 2.3\% & 2.5\% & 6.1\% & 12.3\% & 4.3\% & 13.5\% & --- \\
+coefficient of variation & 1.3\% & 2.3\% & 2.5\% & 6.1\% & 12.3\% & 4.3\% & 13.5\% & n/a \\
 number of $\dd$ contributing & 6 & 6 & 6 & 5 & 4 & 3 & 2 & 1 \\
 \bottomrule
 \end{tabular}
@@ -403,8 +403,8 @@ $\kk$ & rule & acc. & nats & energy & $\kk$ & rule & acc. & nats & energy \\
 \centering
 \includegraphics[width=\textwidth]{figures/e12b_collapse.png}
 \caption{The full version of Figure~\ref{fig:onefrontier}, with both cost axes. \textbf{Top:} excess
-NLL. \textbf{Bottom:} signal-domain energy distance, which is noisier---its per-window estimator has
-a standard deviation of order the signal scale---but shows the same collapse and the same failure of
+NLL. \textbf{Bottom:} signal-domain energy distance, which is noisier (its per-window estimator has
+a standard deviation of order the signal scale) but shows the same collapse and the same failure of
 the anti-control to separate. That the two metrics agree matters: they measure different things, and
 a rule that beat the frontier on one while losing on the other would indicate the frontier was an
 artefact of the metric rather than a property of the problem.}
@@ -458,8 +458,8 @@ signal-bottom & 0.712 & $+5.122$ & $\mathbf{-0.0636}$ \\
 \end{tabular}
 \end{center}
 
-Every rule scores \emph{negative} excess distortion---apparently improving on genuine target
-samples---and the anti-control, which by construction verifies the least important directions, scores
+Every rule scores \emph{negative} excess distortion, apparently improving on genuine target
+samples, and the anti-control, which by construction verifies the least important directions, scores
 best of all by a factor of four. The explanation is that the draft is the smaller model, its
 predictive distribution is tighter, and its samples therefore sit closer to the conditional mean.
 Squared error against a single ground-truth reference is minimised by the conditional mean, not by a
@@ -491,8 +491,8 @@ signal-bottom & 0.724 & $+5.409$ & $\mathbf{+1.313}$ \\
 \end{center}
 
 The ordering is now the one the construction demands: the anti-control is decisively worst, and exact
-verification anchors at zero. We verify the estimator's properties directly in unit tests---zero for
-matching distributions, positive under a mean shift, and positive under variance shrinkage---rather
+verification anchors at zero. We verify the estimator's properties directly in unit tests (zero for
+matching distributions, positive under a mean shift, and positive under variance shrinkage) rather
 than relying on the pipeline to exhibit them.
 
 \paragraph{Both metrics are reported everywhere.} Excess NLL asks whether we are still sampling from
@@ -550,7 +550,7 @@ M = \frac{\|\delta\|}{\sigma} \;=\; \frac{\delta_{\text{coord}}\sqrt{\dd}}{\sigm
 At $\dd = 16$ this permits a per-coordinate relative disagreement of about $0.42\sigma$; at
 $\dd = 256$ it permits $0.11\sigma$; at $\dd = 4096$, $0.027\sigma$. The requirement tightens as
 $1/\sqrt{\dd}$, and it is a requirement on how closely two \emph{separately trained} networks agree
-pointwise in latent space---a far stronger condition than matching in distribution, and one that
+pointwise in latent space, a far stronger condition than matching in distribution, and one that
 nothing in ordinary training encourages.
 
 \paragraph{Reading our measurements against it.} Our models sit at
@@ -578,13 +578,13 @@ Proposition~\ref{prop:conservation} predicts.}
 speculative decoding on drafts that $\dd = 64$ would reject outright. This is a reason to prefer
 narrow latents that has nothing to do with reconstruction quality, and it is not visible from any
 single-$\dd$ pipeline.
-\item \textbf{Do not budget for a projected rule.} It will raise acceptance---a random one raises it
-$180\times$ at $\dd{=}128$---but Table~\ref{tab:collapse} shows the fidelity paid is the same
+\item \textbf{Do not budget for a projected rule.} It will raise acceptance, and a random one raises it
+$180\times$ at $\dd{=}128$, but Table~\ref{tab:collapse} shows the fidelity paid is the same
 whichever subspace is chosen, so the choice is not a design lever and effort spent selecting it is
 wasted. If a relaxation is acceptable at all, the cheapest correct one is a random projection at the
 $\kk$ that meets the fidelity budget.
 \item \textbf{Couple the pair during training.} \S\ref{sec:moving} shows post-hoc distillation moves
-the frontier, and it is the weakest form of coupling available---the draft chases a target it never
+the frontier, and it is the weakest form of coupling available, since the draft chases a target it never
 influenced. Architectures that already maintain a predictor and an EMA target encoder produce a
 matched pair as a by-product of training, and our results suggest that is where the leverage is.
 \end{itemize}
