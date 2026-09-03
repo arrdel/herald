@@ -1,0 +1,609 @@
+\section{Proofs}
+\label{app:proofs}
+
+\subsection{Exactness of the residual scheme}
+\label{app:exactness}
+
+We record the identity the whole measurement apparatus is anchored on. Let $q, p$ be densities on
+$\R^\dd$, let $\alpha(x) = \min\{1, p(x)/q(x)\}$, let $\bar{A} = \E_{q}[\alpha]$, and let
+$Z = \int (p(u) - q(u))_+ \, du$. Draw $x \sim q$, accept with probability $\alpha(x)$, and on
+rejection draw from $r(x) = (p(x) - q(x))_+ / Z$. The emitted density is
+\[
+\tilde{p}(x) = q(x)\alpha(x) + (1 - \bar{A})\,r(x).
+\]
+
+First, $Z = 1 - \bar{A}$. Writing $\min\{a,b\} = b - (b-a)_+$ with $a = p$, $b = q$,
+\[
+\bar{A} = \int q(x)\min\Bigl\{1, \tfrac{p(x)}{q(x)}\Bigr\} dx = \int \min\{q(x), p(x)\} \, dx
+        = \int \bigl(q(x) - (q(x) - p(x))_+\bigr) dx = 1 - \int (q - p)_+ .
+\]
+Since $\int p = \int q = 1$ we have $\int (p-q)_+ = \int (q-p)_+$, so $Z = 1 - \bar A$ as claimed.
+Substituting,
+\[
+\tilde{p}(x) = \min\{q(x), p(x)\} + (p(x) - q(x))_+ = p(x),
+\]
+because $\min\{a,b\} + (a - b)_+ = a$ pointwise. Hence exact verification with a correct residual
+sampler emits the target \emph{exactly}, and any measurement of its fidelity must return zero up to
+Monte Carlo error.
+
+This is why we implement the residual by rejection---proposing $y \sim p$ and accepting with
+probability $(1 - q(y)/p(y))_+$, which targets $(p-q)_+/Z$---rather than by resampling from $p$.
+Resampling from $p$ gives $\tilde p = q\alpha + (1-\bar A)p \ne p$, so exact verification would score
+as \emph{lossy} and every relative fidelity number in \S\ref{sec:conservation} would be measuring the
+harness rather than the rule. We report the residual sampler's convergence rate alongside every
+fidelity measurement; it is $1.000$ throughout the experiments in this paper.
+
+\subsection{Proof of Proposition~\ref{prop:rowspace} (row-space invariance)}
+
+Let $A \in \R^{\kk\times\dd}$ and $Q \in \R^{\kk\times\kk}$ invertible. For a random vector $x$ with
+density $f$, the pushforward of $f$ under $x \mapsto QAx$ relates to that under $x \mapsto Ax$ by the
+change-of-variables factor $|\det Q|^{-1}$: writing $f_A$ for the density of $Ax$,
+\[
+f_{QA}(u) = |\det Q|^{-1} f_A(Q^{-1}u).
+\]
+Evaluating the acceptance ratio for the statistic $QAx$ at a point $x$, with $s = Ax$ and $u = Qs$,
+\[
+\frac{p_{QA}(Qs)}{q_{QA}(Qs)}
+= \frac{|\det Q|^{-1} p_A(s)}{|\det Q|^{-1} q_A(s)}
+= \frac{p_A(s)}{q_A(s)} .
+\]
+The Jacobian cancels, so $\min\{1, p_{QA}/q_{QA}\} = \min\{1, p_A/q_A\}$ at every $x$. $\square$
+
+Two consequences are used in the main text. Any two matrices with the same row space induce identical
+acceptance behaviour, so an acceptance rule of this family is a choice of subspace; and each rule may
+therefore be reduced to an orthonormal basis without changing anything, which is what makes the
+comparison in Table~\ref{tab:collapse} like for like. When $\kk = \dd$ and $A$ is invertible the same
+argument gives $p_A/q_A = p/q$, so full-rank projected verification reproduces exact verification
+identically---the correctness test we apply to every projection implementation.
+
+\subsection{Proof of Proposition~\ref{prop:conservation} (conservation)}
+
+Let $p = \mathcal{N}(\mu_p, \sigma^2 I_\dd)$, $q = \mathcal{N}(\mu_q, \sigma^2 I_\dd)$,
+$\delta = \mu_p - \mu_q$. Let $A \in \R^{\kk\times\dd}$ have orthonormal rows, so $AA^\top = I_\kk$,
+and let $A_\perp \in \R^{(\dd-\kk)\times\dd}$ be an orthonormal basis of the orthogonal complement of
+the row space, so that the stacked matrix
+$U = \left[\begin{smallmatrix} A \\ A_\perp\end{smallmatrix}\right] \in \R^{\dd\times\dd}$ is
+orthogonal.
+
+The pushforward of a Gaussian under a linear map is Gaussian, so
+$p_A = \mathcal{N}(A\mu_p,\, A(\sigma^2 I)A^\top) = \mathcal{N}(A\mu_p, \sigma^2 I_\kk)$, and likewise
+for $q_A$. Two Gaussians with common covariance $\sigma^2 I_\kk$ and mean gap $A\delta$ satisfy
+\[
+\KL(p_A \| q_A) = \frac{\|A\delta\|^2}{2\sigma^2}, \qquad
+\KL(p_{A_\perp} \| q_{A_\perp}) = \frac{\|A_\perp\delta\|^2}{2\sigma^2}.
+\]
+Because $U$ is orthogonal it preserves norms, giving
+$\|A\delta\|^2 + \|A_\perp\delta\|^2 = \|\delta\|^2$ and therefore
+\[
+\KL(p_A \| q_A) + \KL(p_{A_\perp} \| q_{A_\perp}) = \frac{\|\delta\|^2}{2\sigma^2} = \KL(p \| q),
+\]
+independent of $A$.
+
+For the acceptance rate, two Gaussians in $\R^\kk$ with shared covariance $\sigma^2 I$ and mean
+separation $m = \|A\delta\|$ have total variation distance $\TV = 2\Phi(m/2\sigma) - 1$, so the
+expected acceptance is
+\[
+\bar{A}_A = 1 - \TV(p_A, q_A) = 2 - 2\Phi\!\left(\frac{\|A\delta\|}{2\sigma}\right),
+\]
+a strictly decreasing function of $\|A\delta\|^2$ alone. $\square$
+
+\paragraph{Reading the result.} Both the acceptance rate and the divergence that leaks past the test
+are determined by the single scalar $\|A\delta\|^2 \in [0, \|\delta\|^2]$: as it increases, acceptance
+falls and the leak shrinks, and their sum is pinned. A subspace rule chooses a value of that scalar
+and nothing else. This is the precise sense in which acceptance is conserved, and it is why the
+adversarial anti-control of \S\ref{sec:conservation} is not a bad rule but a rule that has chosen a
+different point on the same curve.
+
+\paragraph{Where the assumptions bind.} Shared covariance is what makes the pushforward covariance
+$A\Sigma A^\top$ equal to $\sigma^2 I_\kk$ for \emph{every} orthonormal $A$; with heteroscedastic
+components the pushforward acquires a genuine $\kk\times\kk$ covariance that depends on $A$, and the
+identity becomes approximate. The mixture structure adds a second source of slack, since the KL
+between mixtures does not decompose. Both are reasons to measure rather than assume, which is what
+\S\ref{sec:conservation} does; the observed departures from a single curve are $5.2\%$ of the range at
+$\dd{=}64$.
+
+\paragraph{The random-subspace corollary.} If $A$ is drawn uniformly from the Stiefel manifold, then
+$\E\|A\delta\|^2 = (\kk/\dd)\|\delta\|^2$ by symmetry. Substituting into the acceptance formula gives
+$\bar A = 2 - 2\Phi\bigl(\sqrt{\kk/\dd}\,\|\delta\|/2\sigma\bigr)$, and since
+$\|\delta\| = \delta_{\text{coord}}\sqrt{\dd}$ when the per-coordinate gap is fixed, the $\dd$ cancels
+and acceptance depends on $\kk$ alone. This is the prediction the null control confirms, with a
+coefficient of variation of $1.3\%$--$12.3\%$ across a $32\times$ range of $\dd$.
+
+\section{The Continuous Speculative Decoding Criterion}
+\label{app:cspd}
+
+\subsection{The trajectory ratio}
+
+The method of \citet{wang2025continuous} verifies a token produced by a diffusion head. Crucially it
+draws the diffusion noise once and shares it between the draft and target denoising trajectories, so
+the two trajectories are coupled and the verified object is not the final sample but the entire
+trajectory $x_T \to x_{T-1} \to \cdots \to x_0$. The correct density ratio is therefore
+\[
+\frac{p(x_{0:T})}{q(x_{0:T})} = \prod_{t=1}^{T} \frac{p(x_{t-1} \mid x_t)}{q(x_{t-1} \mid x_t)} ,
+\]
+since the shared $x_T$ contributes a factor of one. Each transition is Gaussian,
+$p(x_{t-1}|x_t) = \mathcal{N}(\mu_{p,t}, \Sigma_{p,t})$ with diagonal $\Sigma$, so each term
+contributes both an exponential and a normalising factor:
+\[
+\frac{p(x_{t-1}|x_t)}{q(x_{t-1}|x_t)}
+= \frac{|\Sigma_{q,t}|^{1/2}}{|\Sigma_{p,t}|^{1/2}}
+  \exp\!\Bigl(-\tfrac{1}{2}\|x_{t-1}-\mu_{p,t}\|^2_{\Sigma_{p,t}^{-1}}
+              +\tfrac{1}{2}\|x_{t-1}-\mu_{q,t}\|^2_{\Sigma_{q,t}^{-1}}\Bigr).
+\]
+Collecting the normalisers over the trajectory gives an accumulated factor
+\begin{equation}
+\text{correct} \;=\; \prod_{t=1}^{T} \prod_{i=1}^{\dd} \frac{\sigma_{q,t,i}}{\sigma_{p,t,i}}
+\;=\; \exp\Bigl(\textstyle\sum_{t,i} \log \sigma_{q,t,i} - \sum_{t,i} \log \sigma_{p,t,i}\Bigr).
+\label{eq:correct-factor}
+\end{equation}
+Note the orientation: \emph{draft over target}, i.e.\ $q$ in the numerator, because the normaliser of
+a Gaussian carries $\sigma^{-1}$ and the ratio inverts it.
+
+\subsection{What the implementation computes}
+
+The released implementation accumulates a per-model running sum of log standard deviations across the
+sampler's steps and multiplies the ratio by
+\begin{equation}
+\text{shipped} \;=\; \exp\Bigl(\textstyle\sum_{t,i}\log\sigma_{p,t,i} - \sum_{t,i}\log\sigma_{q,t,i}\Bigr)
+\;=\; \prod_{t,i} \frac{\sigma_{p,t,i}}{\sigma_{q,t,i}} .
+\label{eq:shipped-factor}
+\end{equation}
+Two points of bookkeeping are worth stating because they are where an audit can go wrong. The
+diffusion code returns $\tfrac{1}{2}\log \mathrm{Var}$ under the key \texttt{log\_variance}, so the
+accumulator holds $\sum \log \sigma$ and not $\sum\log\sigma^2$; and the accumulation is over the
+sampler's full schedule, so $T$ is the number of denoising steps, not one.
+
+Comparing Eq.~\ref{eq:correct-factor} and Eq.~\ref{eq:shipped-factor}, the shipped factor is the
+\emph{reciprocal} of the required one. It is not a spurious term---an independent derivation
+\citep{zhang2025fastardiff} presents the same normaliser as part of the correct criterion, and our
+analysis agrees that it belongs. It is applied upside down.
+
+\subsection{Magnitude of the error}
+
+Since $\text{shipped} = \text{correct}^{-1}$, using the shipped factor rather than omitting it moves
+the log-ratio by $2\log(\text{correct})$: the error exponent is \emph{twice} the factor's own
+exponent, and the ratio is wrong by $\text{correct}^2$. Bounding the accumulated variance mismatch
+over the sampler's schedule and channel count gives:
+
+\begin{center}
+\small
+\begin{tabular}{lr}
+\toprule
+quantity & value \\
+\midrule
+worst-case exponent of the factor (16 channels, full schedule) & $80.8$ \\
+worst-case error exponent in the ratio ($2\times$) & $\mathbf{161.5}$ \\
+exponent at an assumed $5\%$ per-step variance gap & $4.04$ \\
+error exponent at that gap ($2\times$) & $8.08$, i.e.\ $\approx 3{,}200\times$ \\
+exponent sufficient merely to double the acceptance rate & $0.693$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+An exponent of $0.693$ doubles acceptance; the plausible operating point is an exponent of $8$. The
+criterion therefore saturates $\min\{1,\cdot\}$ for the overwhelming majority of tokens and accepts
+almost everything. On synthetic Gaussians an exponent of $4.0$ alone moves acceptance from $0.32$ to
+$0.91$ at temperature $1$. A method that accepts nearly everything will report a large speedup, and
+without an output-fidelity audit that speedup is indistinguishable from a correct one.
+
+\subsection{Why this is a sign slip and not a modelling choice}
+
+Two features of the source identify the orientation as accidental. First, the normaliser for the
+\emph{final} denoising step appears in the same expression written the right way round, as a ratio of
+draft to target standard deviations; only the accumulated term over the earlier steps is inverted.
+Second, the accumulation is written as target-minus-draft while every other scale-carrying term in the
+same file is draft-over-target. A deliberate design choice would be unlikely to be locally
+inconsistent with the expression it sits inside.
+
+We note that our own earlier analysis of this criterion claimed the accumulated factor had no place in
+the ratio at all. That claim was wrong, and reading \citet{zhang2025fastardiff} against the source is
+what corrected it. The resulting claim is weaker---the term belongs, and is inverted---and far more
+defensible, with an independent derivation supporting the form.
+
+\section{Experimental Setup}
+\label{app:setup}
+
+\paragraph{Data.} ETTh1, the seven-channel hourly electricity-transformer series
+\citep{zhou2021informer}. We split chronologically into $70/10/20$ train/validation/test fractions,
+fit the standardiser on the training split only, and cut sliding windows of length $96$ \emph{after}
+splitting, so that no window straddles a boundary and no test window shares a timestamp with a
+training one. Test tokens number $3{,}389$ windows of $12$ tokens each.
+
+\paragraph{Tokenizer.} A patch VAE \citep{kingma2014auto}, the one-dimensional analogue of the KL16
+image tokenizer: a strided convolutional encoder maps a $(7, 96)$ window to $12$ tokens of dimension
+$\dd$, and a mirrored decoder maps them back. Patch size $8$, hidden width $128$, three residual
+blocks, KL weight $10^{-6}$. The posterior log-variance is clamped, because early in training the
+encoder drives it towards $-60$ on easy patches and collapses the latent. Trained for $2{,}000$ steps
+per dimension. Crucially, $\dd$ is a constructor argument and the tokenizer is retrained at every
+$\dd$ in the sweep, which is what makes the acceptance-versus-$\dd$ curve possible at all.
+
+\paragraph{Autoregressive models.} A masked autoregressive transformer over continuous tokens, the
+one-dimensional analogue of MAR \citep{li2024autoregressive}. Masked positions are predicted from
+unmasked ones, and the per-token distribution is a diagonal Gaussian mixture rather than a softmax
+over a vocabulary. The mask ratio is drawn per sample from a truncated cosine distribution over
+$[0.7, 1.0]$ of tokens, matching MAR: training predominantly on heavily masked inputs is what makes
+the model usable at the early generation steps where almost nothing is known.
+
+\begin{center}
+\small
+\begin{tabular}{lccccc}
+\toprule
+model & width & depth & heads & mixture components & role \\
+\midrule
+target & 256 & 6 & 8 & 8 & the expensive model being accelerated \\
+draft  & 128 & 4 & 4 & 4 & the cheap proposal model \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Both are trained independently on the same data for $4{,}000$ steps with AdamW
+\citep{loshchilov2019decoupled}, batch size $64$, and identical schedules. Training them independently
+is deliberate: it is the configuration a practitioner reaches for when adding speculative decoding to
+an existing model, and \S\ref{sec:moving} shows what changes when they are coupled.
+
+\paragraph{Measurement.} All acceptance and fidelity numbers are computed on held-out test data
+through a single shared estimator, so that no two experiments in the ladder can drift apart in how
+they define acceptance. Approximately $25{,}000$ acceptance decisions contribute to each E1.1 point
+and $\sim$$8{,}000$ to each E1.2b point. Random number generation is forked and re-seeded per
+measurement: an earlier version seeded only the mask, and because \texttt{MixtureSameFamily.sample}
+accepts no generator the token draw silently followed ambient global state, making measurements
+irreproducible at the third decimal place.
+
+\paragraph{Compute.} Every experiment in this paper runs on CPU. The models are small by design---the
+target has fewer than a million parameters---because the claims concern the token dimension and the
+draft/target divergence, neither of which requires scale to exhibit. The full ladder reruns in under
+an hour on eight threads.
+
+\section{Convergence Controls for the Dimensional Collapse}
+\label{app:convergence}
+
+The obvious objection to Table~\ref{tab:e11} is that a fixed step budget leaves high-dimensional
+models less converged, so the collapse could be a training artefact rather than a property of the
+dimension. We address it twice.
+
+\paragraph{Convergence traces.} Checkpointing throughout training at $\dd \in \{16, 128\}$ and
+measuring acceptance between every pair of draft and target checkpoints shows both dimensions plateau
+well inside the $4{,}000$-step budget: $\dd{=}16$ by roughly $750$ steps and $\dd{=}128$ by roughly
+$500$. Extending to $16{,}000$ steps does not rescue acceptance; it \emph{falls} further, because
+validation loss turns over early and the two models proceed to overfit apart rather than together.
+More training makes speculative acceptance worse, not better, which is the opposite of what the
+confound predicts.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/e11b_convergence.png}
+\caption{Convergence traces at $\dd \in \{16, 128\}$. Acceptance is measured between draft and target
+checkpoints throughout training. Both dimensions plateau well inside the budget used for
+Table~\ref{tab:e11}, and continued training lowers acceptance rather than raising it: the two models
+overfit apart. The third panel plots the per-coordinate gap $\delta$ against step as a scatter rather
+than a line, because $\delta$ is not monotone in the step count and joining the points would imply a
+trajectory that does not exist.}
+\label{fig:convergence}
+\end{figure}
+
+\paragraph{Matched-$\delta$ comparison.} The sharper control dispenses with step counts entirely.
+Across the checkpoint grid we find pairs at $\dd{=}16$ and $\dd{=}128$ whose measured per-coordinate
+gap $\delta$ is equal, and compare their acceptance rates directly. At identical per-coordinate
+agreement the $\dd{=}128$ models accept roughly $60\times$ less often---a median of $62\times$ over
+$15$ matched pairs at the $4{,}000$-step budget and $64\times$ over $7$ pairs at $16{,}000$. Since
+$\delta$ is held fixed by construction, the residual factor is attributable to dimension alone.
+
+\section{Full Results}
+\label{app:results}
+
+\subsection{Random projections: the null control and the frontier}
+
+Acceptance under a uniformly random $\kk$-dimensional statistic, averaged over five independent draws
+of $A$ per cell, as a function of the verified dimension $\kk$ across all six token dimensions:
+
+\begin{center}
+\small
+\begin{tabular}{lcccccccc}
+\toprule
+$\kk$ & 1 & 2 & 4 & 8 & 16 & 32 & 64 & 128 \\
+\midrule
+mean acceptance over $\dd$ & 0.8786 & 0.7846 & 0.6244 & 0.4102 & 0.2093 & 0.0774 & 0.0205 & 0.0035 \\
+coefficient of variation & 1.3\% & 2.3\% & 2.5\% & 6.1\% & 12.3\% & 4.3\% & 13.5\% & --- \\
+number of $\dd$ contributing & 6 & 6 & 6 & 5 & 4 & 3 & 2 & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Acceptance is a function of $\kk$ essentially alone: at $\kk = 4$ the rate is $0.624$ whether the
+ambient dimension is $4$ or $128$. As a check on the implementation, $\kk = \dd$ reproduces raw
+verification to four decimal places at all six dimensions.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/e12a_random_projection.png}
+\caption{The null control. Acceptance under a random $\kk$-dimensional statistic, for every ambient
+dimension $\dd$. The curves lie on top of one another: what matters is $\kk$, not $\dd$. A
+structureless projection lifts acceptance at $\dd{=}128$ from $0.0035$ to $0.64$ while knowing
+nothing about the model, which is why any claim that a \emph{designed} statistic raises acceptance
+must be measured against this baseline rather than against exact verification.}
+\label{fig:nullcontrol}
+\end{figure}
+
+The acceptance/fidelity frontier for random projections, which is the baseline all structured rules
+are scored against:
+
+\begin{center}
+\small
+\begin{tabular}{lcccccccc}
+\toprule
+& \multicolumn{5}{c}{$\dd = 16$} & \multicolumn{3}{c}{$\dd = 64$ (abridged)} \\
+\cmidrule(lr){2-6}\cmidrule(lr){7-9}
+$\kk$ & 16 (exact) & 8 & 4 & 2 & 1 & 64 (exact) & 8 & 1 \\
+\midrule
+acceptance & 0.1613 & 0.3531 & 0.5960 & 0.7419 & 0.8475 & 0.0138 & 0.4094 & 0.8675 \\
+excess NLL & $-0.003$ & 1.423 & 3.802 & 5.352 & 6.397 & $+0.125$ & 11.300 & 27.609 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The exact anchors read $-0.0031 \pm 0.0520$ at $\dd{=}16$ and $+0.1251 \pm 0.1375$ at $\dd{=}64$, both
+consistent with the losslessness guarantee of Appendix~\ref{app:exactness}.
+
+\subsection{Five subspace rules at matched $\kk$}
+
+The complete E1.2b measurement. Acceptance, excess NLL in nats per token, and signal-domain energy
+distance, for every rule and every $\kk$. Recall from Proposition~\ref{prop:rowspace} that each row is
+a choice of subspace; the rules differ enormously at matched $\kk$ and yet, when replotted against
+acceptance, trace one curve (Table~\ref{tab:collapse}).
+
+\begin{center}
+\small
+\begin{tabular}{llccc|llccc}
+\toprule
+\multicolumn{5}{c|}{$\dd = 16$} & \multicolumn{5}{c}{$\dd = 64$} \\
+$\kk$ & rule & acc. & nats & energy & $\kk$ & rule & acc. & nats & energy \\
+\midrule
+16 & exact         & 0.173 & $+0.03$ & $+0.10$ & 64 & exact         & 0.018 & $-0.01$ & $-0.03$ \\
+\midrule
+1 & random        & 0.851 & $+6.11$ & $+1.13$ & 1 & random        & 0.879 & $+25.54$ & $+1.26$ \\
+1 & pca           & 0.736 & $+5.23$ & $+0.84$ & 1 & pca           & 0.612 & $+17.11$ & $+0.57$ \\
+1 & signal-top    & 0.794 & $+5.55$ & $+1.01$ & 1 & signal-top    & 0.664 & $+19.54$ & $+0.68$ \\
+1 & dct-low       & 0.795 & $+5.55$ & $+0.99$ & 1 & dct-low       & 0.662 & $+19.51$ & $+0.69$ \\
+1 & signal-bottom & 0.897 & $+6.46$ & $+1.70$ & 1 & signal-bottom & 0.917 & $+26.52$ & $+1.22$ \\
+\midrule
+2 & random        & 0.752 & $+5.24$ & $+0.91$ & 2 & random        & 0.789 & $+22.18$ & $+0.92$ \\
+2 & pca           & 0.563 & $+3.57$ & $+0.44$ & 2 & pca           & 0.360 & $+8.85$  & $+0.38$ \\
+2 & signal-top    & 0.669 & $+4.27$ & $+0.27$ & 2 & signal-top    & 0.440 & $+12.28$ & $+0.24$ \\
+2 & dct-low       & 0.667 & $+4.26$ & $+0.26$ & 2 & dct-low       & 0.437 & $+12.18$ & $+0.22$ \\
+2 & signal-bottom & 0.840 & $+5.83$ & $+1.24$ & 2 & signal-bottom & 0.864 & $+24.22$ & $+1.06$ \\
+\midrule
+4 & random        & 0.606 & $+3.66$ & $+0.39$ & 4 & random        & 0.635 & $+17.39$ & $+0.45$ \\
+4 & pca           & 0.383 & $+1.66$ & $+0.25$ & 4 & pca           & 0.142 & $+2.70$  & $+0.09$ \\
+4 & signal-top    & 0.437 & $+2.17$ & $+0.09$ & 4 & signal-top    & 0.180 & $+3.56$  & $+0.05$ \\
+4 & dct-low       & 0.435 & $+2.16$ & $+0.10$ & 4 & dct-low       & 0.180 & $+3.55$  & $+0.05$ \\
+4 & signal-bottom & 0.741 & $+4.77$ & $+0.83$ & 4 & signal-bottom & 0.790 & $+21.45$ & $+0.96$ \\
+\midrule
+8 & random        & 0.369 & $+1.47$ & $+0.16$ & 8 & random        & 0.428 & $+10.52$ & $+0.23$ \\
+8 & pca           & 0.246 & $+0.65$ & $-0.03$ & 8 & pca           & 0.077 & $+1.13$  & $+0.09$ \\
+8 & signal-top    & 0.273 & $+0.75$ & $+0.15$ & 8 & signal-top    & 0.099 & $+1.55$  & $-0.01$ \\
+8 & dct-low       & 0.272 & $+0.75$ & $+0.13$ & 8 & dct-low       & 0.098 & $+1.51$  & $-0.03$ \\
+8 & signal-bottom & 0.554 & $+3.06$ & $+0.32$ & 8 & signal-bottom & 0.687 & $+17.75$ & $+0.56$ \\
+\midrule
+  &               &       &         &         & 16 & random        & 0.210 & $+4.21$  & $+0.06$ \\
+  &               &       &         &         & 16 & pca           & 0.049 & $+0.52$  & $-0.01$ \\
+  &               &       &         &         & 16 & signal-top    & 0.057 & $+0.62$  & $+0.08$ \\
+  &               &       &         &         & 16 & dct-low       & 0.057 & $+0.64$  & $+0.09$ \\
+  &               &       &         &         & 16 & signal-bottom & 0.518 & $+12.41$ & $+0.45$ \\
+\midrule
+  &               &       &         &         & 32 & random        & 0.077 & $+0.95$  & $+0.04$ \\
+  &               &       &         &         & 32 & pca           & 0.033 & $+0.19$  & $-0.01$ \\
+  &               &       &         &         & 32 & signal-top    & 0.037 & $+0.26$  & $+0.01$ \\
+  &               &       &         &         & 32 & dct-low       & 0.038 & $+0.26$  & $+0.11$ \\
+  &               &       &         &         & 32 & signal-bottom & 0.319 & $+6.49$  & $-0.14$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/e12b_collapse.png}
+\caption{The full version of Figure~\ref{fig:onefrontier}, with both cost axes. \textbf{Top:} excess
+NLL. \textbf{Bottom:} signal-domain energy distance, which is noisier---its per-window estimator has
+a standard deviation of order the signal scale---but shows the same collapse and the same failure of
+the anti-control to separate. That the two metrics agree matters: they measure different things, and
+a rule that beat the frontier on one while losing on the other would indicate the frontier was an
+artefact of the metric rather than a property of the problem.}
+\label{fig:onefrontier-full}
+\end{figure}
+
+Reading the table by $\kk$ suggests five very different methods: at $\dd{=}64, \kk{=}4$, acceptance
+ranges from $0.14$ to $0.79$, a factor of $5.6$. Reading it by acceptance shows one curve. Note also
+the near-identity of \textbf{signal-top} and \textbf{dct-low} at every cell; the low-frequency band of
+the decoded patch and the decoder's overall sensitivity select nearly the same subspace, which is a
+statement about this decoder rather than about acceptance rules in general.
+
+\subsection{Distillation}
+
+Full stage-wise results for the alignment experiment of \S\ref{sec:moving}. Excess NLL remains zero
+within error at every stage, confirming that the acceptance gains are free rather than traded:
+
+\begin{center}
+\small
+\begin{tabular}{lccccc}
+\toprule
+$\dd$ & 0 steps & 600 steps & 1{,}200 steps & 1{,}800 steps & total gain \\
+\midrule
+16 & 0.1744 & 0.1850 & 0.1960 & 0.1979 & $1.13\times$ \\
+64 & 0.0182 & 0.0185 & 0.0213 & 0.0245 & $1.34\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{The Signal-Domain Metric, and the One That Failed}
+\label{app:metric}
+
+Reporting a fidelity cost for a relaxed acceptance rule requires a metric that a bad rule cannot win.
+Our first choice failed this requirement, and we record the failure because the failure mode is
+general and quiet.
+
+\paragraph{Excess squared error rewards mode collapse.} The natural signal-domain metric is: decode
+the emitted tokens, measure squared error against the real window, and subtract the error a genuine
+target draw would have incurred. Under it we measured, at $\dd{=}16$, $\kk{=}4$:
+
+\begin{center}
+\small
+\begin{tabular}{lccc}
+\toprule
+rule & acceptance & excess NLL & excess MSE \\
+\midrule
+exact         & 0.144 & $-0.087$ & $-0.0068$ \\
+signal-top    & 0.383 & $+1.880$ & $-0.0152$ \\
+signal-bottom & 0.712 & $+5.122$ & $\mathbf{-0.0636}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every rule scores \emph{negative} excess distortion---apparently improving on genuine target
+samples---and the anti-control, which by construction verifies the least important directions, scores
+best of all by a factor of four. The explanation is that the draft is the smaller model, its
+predictive distribution is tighter, and its samples therefore sit closer to the conditional mean.
+Squared error against a single ground-truth reference is minimised by the conditional mean, not by a
+correct sample from the predictive distribution, so any rule that emits more draft samples scores
+better. A degenerate rule emitting the conditional mean every time would win outright.
+
+\paragraph{Energy distance.} We replace it with the two-sample energy statistic
+\citep{szekely2013energy}, computed on decoded waveforms under the same conditioning:
+\[
+\mathcal{E} = 2\,\E\|X - Y\| - \E\|X - X'\| - \E\|Y - Y'\|,
+\]
+with $X, X'$ two independent emissions of the rule and $Y, Y'$ two independent target draws. It is
+non-negative, and zero exactly when the two distributions agree. The $-\E\|X - X'\|$ term rewards
+spread, so shrinking the predictive variance \emph{increases} the statistic rather than decreasing it.
+Re-measuring the same three rules:
+
+\begin{center}
+\small
+\begin{tabular}{lccc}
+\toprule
+rule & acceptance & excess NLL & energy distance \\
+\midrule
+exact         & 0.135 & $-0.026$ & $+0.060 \pm 0.250$ \\
+random        & 0.503 & $+3.229$ & $+0.337$ \\
+signal-top    & 0.353 & $+1.953$ & $+0.069$ \\
+signal-bottom & 0.724 & $+5.409$ & $\mathbf{+1.313}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The ordering is now the one the construction demands: the anti-control is decisively worst, and exact
+verification anchors at zero. We verify the estimator's properties directly in unit tests---zero for
+matching distributions, positive under a mean shift, and positive under variance shrinkage---rather
+than relying on the pipeline to exhibit them.
+
+\paragraph{Both metrics are reported everywhere.} Excess NLL asks whether we are still sampling from
+the model; the energy distance asks whether the reconstructed waveform still has the right
+distribution. They can disagree, and a method reporting only one is easy to fool. The conclusions of
+\S\ref{sec:conservation} hold under both.
+
+\section{What Would Falsify These Claims}
+\label{app:falsifiers}
+
+We state the falsifiers explicitly, since a conservation claim is a claim that something is
+impossible and is therefore only as strong as the effort made to break it.
+
+\begin{itemize}
+\itemsep2pt
+\item \textbf{The collapse is a training artefact.} Falsified if models trained to convergence at
+matched validation loss show acceptance independent of $\dd$. Tested in
+Appendix~\ref{app:convergence}: matched-$\delta$ pairs still show a $60\times$ penalty, and further
+training makes acceptance worse.
+
+\item \textbf{Some subspace beats the frontier.} Falsified by any rule sitting materially below the
+random-projection curve at matched acceptance. Five rules were tried, including one designed with full
+knowledge of the decoder and one designed to be as bad as possible; the largest departure in either
+direction is $5.2\%$ of the range, and the sign of the departure is not stable across $\kk$. A
+nonlinear statistic is not covered by Proposition~\ref{prop:rowspace} and remains open, though it
+forfeits the exactness of the projected test.
+
+\item \textbf{The fidelity metric is measuring the harness.} Falsified if exact verification scores as
+lossy. It does not: excess NLL is $-0.008 \pm 0.080$ and energy distance $-0.026$ at $\dd{=}64$, with
+the residual sampler converging on every rejection. This anchor is checked in every experiment.
+
+\item \textbf{The fidelity metric is gameable.} This one \emph{fired} during the work, against squared
+error, and Appendix~\ref{app:metric} reports it. The replacement is chosen specifically to be immune
+to the failure that occurred, and that immunity is unit-tested rather than assumed.
+
+\item \textbf{Distillation gains are traded, not free.} Falsified if excess NLL rises as acceptance
+does. It does not; the rule remains exact and Appendix~\ref{app:exactness} guarantees losslessness
+analytically, with the measurement confirming it at every stage.
+\end{itemize}
+
+\section{When Can Speculative Sampling Work in a Continuous Token Space?}
+\label{app:practical}
+
+Proposition~\ref{prop:conservation} is usable as a design rule, not only as an obstruction. Because
+acceptance depends on the pair through the single scalar $M = \|\delta\|/\sigma$, a practitioner can
+predict the achievable speedup before implementing anything.
+
+\paragraph{The budget.} Speculative sampling with a draft costing a fraction $c$ of the target's
+forward pass yields an expected speedup of roughly $1/(c + 1 - \bar{A})$ for single-token
+verification, so a rate of $\bar{A} = 0.5$ is worth having and $\bar{A} = 0.02$ is worth nothing.
+Inverting $\bar{A} = 2 - 2\Phi(M/2)$, useful acceptance requires
+\[
+M = \frac{\|\delta\|}{\sigma} \;=\; \frac{\delta_{\text{coord}}\sqrt{\dd}}{\sigma} \;\lesssim\; 1.7 .
+\]
+At $\dd = 16$ this permits a per-coordinate relative disagreement of about $0.42\sigma$; at
+$\dd = 256$ it permits $0.11\sigma$; at $\dd = 4096$, $0.027\sigma$. The requirement tightens as
+$1/\sqrt{\dd}$, and it is a requirement on how closely two \emph{separately trained} networks agree
+pointwise in latent space---a far stronger condition than matching in distribution, and one that
+nothing in ordinary training encourages.
+
+\paragraph{Reading our measurements against it.} Our models sit at
+$\delta_{\text{coord}}/\sigma \approx 0.2$, which is a good draft by any ordinary standard: the two
+networks agree to within a fifth of a standard deviation on every coordinate. That is sufficient at
+$\dd = 4$ ($M = 0.93$, $\bar A = 0.64$) and hopeless at $\dd = 128$ ($M = 5.83$,
+$\bar A = 0.0035$). The same drafter is excellent or useless depending only on the width of the
+latent it operates in.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{figures/e12_frontier.png}
+\caption{The acceptance/fidelity frontier for random projections alone, measured before the
+structured rules of Appendix~\ref{app:results} were built. The red star is exact verification, which
+is lossless. This curve was constructed as the bar that a structured statistic would have to beat;
+Figure~\ref{fig:onefrontier-full} shows that none of them do, which is what
+Proposition~\ref{prop:conservation} predicts.}
+\label{fig:frontier}
+\end{figure}
+
+\paragraph{Consequences for practice.} Three follow directly.
+\begin{itemize}
+\itemsep2pt
+\item \textbf{Narrow latents are worth engineering for.} A tokenizer emitting $\dd = 8$ admits
+speculative decoding on drafts that $\dd = 64$ would reject outright. This is a reason to prefer
+narrow latents that has nothing to do with reconstruction quality, and it is not visible from any
+single-$\dd$ pipeline.
+\item \textbf{Do not budget for a projected rule.} It will raise acceptance---a random one raises it
+$180\times$ at $\dd{=}128$---but Table~\ref{tab:collapse} shows the fidelity paid is the same
+whichever subspace is chosen, so the choice is not a design lever and effort spent selecting it is
+wasted. If a relaxation is acceptable at all, the cheapest correct one is a random projection at the
+$\kk$ that meets the fidelity budget.
+\item \textbf{Couple the pair during training.} \S\ref{sec:moving} shows post-hoc distillation moves
+the frontier, and it is the weakest form of coupling available---the draft chases a target it never
+influenced. Architectures that already maintain a predictor and an EMA target encoder produce a
+matched pair as a by-product of training, and our results suggest that is where the leverage is.
+\end{itemize}
+
+\paragraph{What we have not shown.} That coupled training closes the gap at large $\dd$. Our
+distillation gains are real but small, and the $\sqrt{\dd}$ requirement above suggests they must
+become harder, not easier, as $\dd$ grows: halving $M$ at $\dd = 128$ demands halving the
+per-coordinate gap everywhere at once. Whether any training scheme achieves that is the open
+question our results leave, and it is the one worth attacking next.
+
+\section{Reproducibility}
+\label{app:repro}
+
+Every number in this paper is produced by a scripted experiment that records its own git commit,
+Python and PyTorch versions, full argument list, and wall-clock time into a JSON artefact alongside
+the figure it generates. Acceptance and fidelity are computed by single shared estimators rather than
+per-experiment reimplementations, so the rungs of the ladder cannot drift apart in what they measure.
+The implementation carries $112$ tests, including the losslessness anchor of
+Appendix~\ref{app:exactness}, the $\kk = \dd$ bijection identity, row-space invariance
+(Proposition~\ref{prop:rowspace}), the conservation identity (Proposition~\ref{prop:conservation}),
+the exactness of the DCT band decomposition via Parseval, and the variance-shrinkage property of the
+energy distance. All experiments run on CPU in under an hour.

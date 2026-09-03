@@ -52,10 +52,10 @@ def pca_projection(tokens: torch.Tensor, k: int) -> torch.Tensor:
     return vh[:k].contiguous()
 
 
-def dct_matrix(n: int, dtype=torch.float32) -> torch.Tensor:
+def dct_matrix(n: int, dtype=torch.float32, device=None) -> torch.Tensor:
     """Orthonormal DCT-II matrix, rows ordered from lowest to highest frequency."""
-    i = torch.arange(n, dtype=dtype).unsqueeze(1)
-    f = torch.arange(n, dtype=dtype).unsqueeze(0)
+    i = torch.arange(n, dtype=dtype, device=device).unsqueeze(1)
+    f = torch.arange(n, dtype=dtype, device=device).unsqueeze(0)
     m = torch.cos(torch.pi * (i + 0.5) * f / n).T
     m[0] *= (1.0 / n) ** 0.5
     m[1:] *= (2.0 / n) ** 0.5
@@ -116,7 +116,7 @@ def signal_impact_matrix(
     n_channels = out_dim // patch
 
     if band != "all":
-        dct = dct_matrix(patch, dtype=jac.dtype)
+        dct = dct_matrix(patch, dtype=jac.dtype, device=jac.device)
         half = patch // 2
         rows = dct[:half] if band == "low" else dct[half:]
         # Apply the band selector per channel: the Jacobian's output axis is (channel, time).

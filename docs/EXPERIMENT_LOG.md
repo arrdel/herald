@@ -682,3 +682,118 @@ it is a strong regularity rather than an established law.
 - **E0.4** The pixel-domain audit, on E0.3's samples, in the same sitting.
 - **E0.2** Reproduce CSpD's 2.33× at its defaults.
 - **E0.1b** The FID-50K gate for MAR-B/L and D-JEPA-B, when GPUs are free.
+
+---
+
+## 2026-09-03 — E1.2b — five subspace rules, one frontier. Choosing *which* `k` directions to verify cannot beat choosing *how many*.
+
+**Ran:** `python scripts/run_e12b.py --dims 16 64 --eval-batches 60 --n-projections 3 --threads 8`,
+then `python scripts/analyze_e12b.py`. Commit `f723a64`. CPU only, on E1.1's saved checkpoints.
+
+**Setup:** Five choices of the verified subspace at matched `k`, all reduced to orthonormal bases
+(only the row space affects the ratio, proved and tested): `random` (the E1.2a null control), `pca`
+(top principal directions of the token distribution), `signal_top` (top eigenvectors of `E[JᵀJ]` for
+the decoder Jacobian — the directions that move the waveform most), `dct_low` (the same restricted
+to the low-frequency DCT band of the decoded patch — the transform-domain statistic, linearized
+through the Jacobian so the pushforward stays exactly Gaussian), and `signal_bottom`, an
+**anti-control** that verifies the least important directions and must come out worst if the choice
+of subspace matters at all.
+
+**Result:** it does not matter. Scored against the random curve interpolated to the *same*
+acceptance (never extrapolated):
+
+| | cost range across the sweep | median deviation | max deviation | max as % of range |
+|---|---|---|---|---|
+| d=16, excess NLL | 5.812 nats | 0.077 | 0.357 | **6.1%** |
+| d=64, excess NLL | 26.325 nats | 0.773 | 1.366 | **5.2%** |
+| d=16, energy distance | 1.727 | 0.085 | 0.350 | 20.3% |
+| d=64, energy distance | 1.396 | 0.051 | 0.282 | 20.2% |
+
+The anti-control ranks **best** at several points (1.26 nats *below* the random curve at d=64, k=8)
+and `signal_top` ranks worst (1.37 nats above at k=2). A rule built with full knowledge of the
+decoder is indistinguishable from one designed to be as bad as possible, once acceptance is held
+fixed. The rules are nonetheless genuinely different: at d=64, k=4 acceptance ranges 0.14 (pca) to
+0.79 (anti-control), a 5.6× spread.
+
+**Reading:** there is a conservation identity behind this, and it is why the search was doomed. For
+shared-covariance Gaussians, verifying orthonormal `A` separates the pushforwards by `‖Aδ‖` while
+what leaks out is governed by `‖A⊥δ‖`, and orthonormality forces `‖Aδ‖² + ‖A⊥δ‖² = ‖δ‖²`. Acceptance
+and fidelity are two readings of one conserved budget fixed by the *pair*; a subspace choice only
+picks a point on a single curve. This also explains E1.2a: a random `k`-subspace captures `k/d` of
+`‖δ‖²` regardless of `d`, so acceptance comes out a function of `k` alone. It refines E1.2a too —
+that finding holds only for *random* subspaces, which are exchangeable by rotational symmetry; a
+structured subspace can deliberately sit where `p` and `q` agree and buy a much higher rate at fixed
+`k`, and gains nothing by it.
+
+**A metric had to be replaced.** The first signal-domain metric was excess squared error of the
+decoded waveform against the real window. Under it *every* rule scored **negative** excess
+distortion and the anti-control scored best of all (−0.064 vs −0.015 for `signal_top`). The draft is
+the smaller model, its samples sit closer to the conditional mean, and squared error against a
+single reference is minimised by the conditional mean rather than by a correct sample — so the
+metric rewarded variance shrinkage and would have crowned a rule that always emitted the mean.
+Replaced with a signal-domain **energy distance** `2E‖X−Y‖ − E‖X−X'‖ − E‖Y−Y'‖`, which is zero
+exactly when the decoded distributions agree and is *increased* by mode collapse. Under it the
+ordering is the one the construction demands: exact +0.060±0.250, `signal_top` +0.069, random
++0.337, anti-control **+1.313**. Both metrics are now reported on every rule, and the exact anchor
+holds on both.
+
+**Changes:** kills the E1.2b/E1.3 program as originally framed — there is no `c(k)` to beat, because
+`c(k)` is the same for every rule. C2 is restated a third time, now as a conservation result rather
+than a search for a better statistic, and it is *stronger* for it: an impossibility claim with a
+proof for the tractable case and an adversarial control in the measurement. Reroutes the positive
+claim to E1.4: the only lever left is the divergence itself.
+
+---
+
+## 2026-09-03 — E1.4 — distillation moves the frontier that projection can only slide along
+
+**Ran:** `python scripts/run_e14.py --dims 16 64 --stages 3 --steps-per-stage 600 --eval-batches 40
+--n-projections 2 --threads 8`. Commit `f723a64`. CPU only.
+
+**Setup:** the constructive corollary of E1.2b. If the frontier is fixed by `‖δ‖/σ`, a property of
+the *pair*, then only changing the pair can move it. The draft is distilled against the frozen
+target with a **mode-covering** objective (`KL(p‖q)`, estimated by drawing from the target and
+scoring those draws under the draft). Direction chosen deliberately: reverse KL would let the draft
+collapse onto one mode and score well while being a poor proposal, which is exactly the failure
+speculative sampling punishes.
+
+**Result:**
+
+| d | acceptance before | after 1,800 steps | gain | fidelity cost | projection cost for the same rate |
+|---|---|---|---|---|---|
+| 16 | 0.1744 | 0.1979 | 1.13× | 0 (exact, lossless) | 0.179 nats/token |
+| 64 | 0.0182 | 0.0245 | 1.34× | 0 (exact, lossless) | 0.061 nats/token |
+
+Excess NLL stays at zero within error at every stage, as it must: the rule remains exact, and
+losslessness is guaranteed analytically, not measured hopefully.
+
+**Reading:** modest in absolute terms and not presented as a competitive speedup — the point is the
+*direction*. Distillation is the one intervention tested that moves the curve rather than the
+position on it, which is what the conservation law predicts and what all five subspace rules could
+not do. The gain being small at d=64 is consistent with the same √d mechanism: moving `M = δ√d`
+requires shrinking `δ` everywhere at once, and that gets harder as `d` grows. That is a further
+statement of the difficulty, not a way around it.
+
+**Changes:** supplies C3's positive half. The correct target for future work is the *pair*, not the
+acceptance rule — which is exactly the HERALD thesis, since a D-JEPA-style predictor and EMA target
+encoder are a coupled pair produced as a by-product of training. Two bugs fixed that only appear off
+CPU: `distillation_loss` built its masking generator on CPU (crashes on CUDA batches), and
+`dct_matrix` built on CPU while the Jacobian was on device. Both now follow the batch/tensor device,
+with a regression test for the first.
+
+---
+
+## 2026-09-03 — submission — ICLR 2027 paper written against the corrected claim set
+
+**Ran:** `submission/` built with `tectonic -X compile main.tex` (no TeX on the experiment host; a
+static tectonic binary and a self-contained `iclr2027_conference.sty` reimplementation were used).
+
+**Result:** main text exactly 9 pages, references pp. 9–10, appendix 10 pages, 20 total. Compiles
+with no errors and no undefined references or citations.
+
+**Reading:** the paper leads with the conservation result rather than with a method. Structure: the
+measured collapse (E1.1 + convergence controls), the conservation law with proof and the five-rule
+test including the anti-control, the metric that had to be replaced, distillation as the lever that
+works, and the corrected CSpD criterion. The negative result is the contribution; the falsifiers are
+stated explicitly in an appendix, including the one that *fired* during the work (squared error was
+gameable, and the anti-control exposed it).

@@ -252,9 +252,14 @@ def distillation_loss(
     target = target.eval()
     for param in target.parameters():
         param.requires_grad_(False)
-    generator = torch.Generator(device="cpu").manual_seed(seed)
+    # Built lazily on first call: torch requires the generator's device to match the tensors it
+    # draws, so the device cannot be known until a batch arrives.
+    generators: dict[torch.device, torch.Generator] = {}
 
     def loss_fn(model: TimeSeriesMAR, batch: torch.Tensor) -> dict[str, torch.Tensor]:
+        if batch.device not in generators:
+            generators[batch.device] = torch.Generator(device=batch.device).manual_seed(seed)
+        generator = generators[batch.device]
         mask = random_masking(batch.shape[0], batch.shape[1], batch.device, generator=generator)
         with torch.no_grad():
             sample = target.token_distribution(target.forward_predictor(batch, mask)).sample()

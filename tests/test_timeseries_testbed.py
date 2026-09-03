@@ -262,3 +262,23 @@ def test_train_module_runs_both_losses_end_to_end():
     token_ds = TokenizedDataset(bundle.train, tok)
     assert token_ds[0].shape == (4, 4)
     train_module(_tiny_mar(d=4, n_tokens=4), token_ds, mar_loss, config, tag="mar")
+
+
+def test_distillation_loss_follows_the_batch_device():
+    """Regression: the masking generator was built on CPU and crashed on CUDA batches.
+
+    torch requires a generator's device to match the tensors it draws, so the generator cannot be
+    created until a batch arrives. This asserts the device is taken from the batch rather than fixed
+    at construction; it is the CPU half of a failure that only appeared on GPU.
+    """
+    from herald.train.timeseries import distillation_loss
+
+    target, student = _tiny_mar(d=4, n_tokens=4), _tiny_mar(d=4, n_tokens=4)
+    loss_fn = distillation_loss(target, seed=0)
+    batch = torch.randn(8, 4, 4)
+
+    out = loss_fn(student, batch)
+    assert out["loss"].requires_grad and torch.isfinite(out["loss"])
+    # The frozen target must not accumulate gradients through the distillation objective.
+    out["loss"].backward()
+    assert all(p.grad is None for p in target.parameters())

@@ -3,3 +3,15 @@
   d=16   step 1200   exact acceptance 0.1960  nats +0.1023  energy -0.1370
   d=16   step 1800   exact acceptance 0.1979  nats -0.0089  energy -0.0754
   d=64   step 0      exact acceptance 0.0182  nats -0.0463  energy -0.0689
+  d=64   step 600    exact acceptance 0.0185  nats +0.0441  energy -0.0645
+  d=64   step 1200   exact acceptance 0.0213  nats -0.0145  energy +0.1042
+  d=64   step 1800   exact acceptance 0.0245  nats +0.0877  energy -0.0999
+
+wrote experiments/E1.4-alignment/results.json
+wrote docs/figures/e14_alignment.png
+
+E1.4: distillation buys acceptance at zero fidelity cost.
+  d=16: exact acceptance 0.1744 -> 0.1979 (1.1x), both lossless.
+    a random projection never reaches that acceptance on the measured curve, at any fidelity cost.
+  d=64: exact acceptance 0.0182 -> 0.0245 (1.3x), both lossless.
+    a random projection never reaches that acceptance on the measured curve, at any fidelity cost.

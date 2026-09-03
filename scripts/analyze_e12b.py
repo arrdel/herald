@@ -101,12 +101,18 @@ def summarize(results: list[dict]) -> list[str]:
     return lines
 
 
-def plot(results: list[dict], path: Path) -> Path:
+def plot(results: list[dict], path: Path, metrics=METRICS) -> Path:
+    """Cost against acceptance for every rule. One panel per (metric, dimension).
+
+    Args:
+        metrics: which cost axes to draw. The paper's main text uses excess NLL alone, where the
+            collapse is tightest and a single row fits the page budget; the appendix uses both.
+    """
     n = len(results)
-    fig, axes = plt.subplots(2, n, figsize=(5.8 * n, 9.2), squeeze=False)
+    fig, axes = plt.subplots(len(metrics), n, figsize=(5.8 * n, 4.6 * len(metrics)), squeeze=False)
 
     for col, r in enumerate(results):
-        for row_idx, (key, label) in enumerate(METRICS):
+        for row_idx, (key, label) in enumerate(metrics):
             ax = axes[row_idx][col]
             for rule in RULES:
                 pts = sorted((row["acceptance"], row[key]) for row in r["rows"]
@@ -138,11 +144,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default="experiments/E1.2b-structured/results.json")
     ap.add_argument("--figure", default="docs/figures/e12b_collapse.png")
+    ap.add_argument("--compact-figure", default="docs/figures/e12b_collapse_compact.png",
+                    help="single-row version, excess NLL only, for the page-limited main text")
     args = ap.parse_args()
 
     results = json.loads(Path(args.results).read_text())["results"]
     print("\n".join(summarize(results)))
     print(f"\nwrote {plot(results, Path(args.figure))}")
+    print(f"wrote {plot(results, Path(args.compact_figure), metrics=METRICS[:1])}")
 
 
 if __name__ == "__main__":
