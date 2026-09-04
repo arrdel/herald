@@ -3,7 +3,7 @@
 # The build machine used for the experiments has no TeX installation, so this Makefile is the
 # handoff: run it anywhere with a standard TeX Live and it produces main.pdf. Everything it needs
 # beyond a base installation (geometry, natbib, fancyhdr, times, booktabs, amsmath, amssymb, amsthm,
-# graphicx, xcolor, hyperref, url, lineno) ships with any full distribution.
+# graphicx, xcolor, bm, tikz/pgf, hyperref, url, lineno) ships with any full distribution.
 
 MAIN = main
 
@@ -11,7 +11,7 @@ MAIN = main
 
 all: $(MAIN).pdf
 
-$(MAIN).pdf: $(MAIN).tex appendix.tex references.bib iclr2027_conference.sty
+$(MAIN).pdf: $(MAIN).tex appendix.tex fig_overview.tex fig_conservation.tex references.bib iclr2027_conference.sty
 	pdflatex -interaction=nonstopmode -halt-on-error $(MAIN)
 	-bibtex $(MAIN)
 	pdflatex -interaction=nonstopmode -halt-on-error $(MAIN)

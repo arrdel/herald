@@ -1,0 +1,140 @@
+% System overview. Kept in its own file because it is long and iterated on independently of the
+% prose. Coordinates are absolute and chosen so the picture is ~14cm wide, i.e. it reaches \textwidth
+% at roughly unit scale; resizing much below 1 makes the annotation text illegible in print.
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  box/.style   = {draw=black!55, rounded corners=2pt, align=center, inner sep=3pt, fill=white},
+  stage/.style = {box, fill=black!4, minimum height=1.15cm},
+  draft/.style = {box, fill=blue!10,   draw=blue!60,        minimum height=0.95cm},
+  targ/.style  = {box, fill=red!10,    draw=red!60,         minimum height=0.95cm},
+  test/.style  = {box, fill=amber!25,  draw=amber!80!black},
+  good/.style  = {box, fill=green!13,  draw=green!45!black},
+  warn/.style  = {box, fill=orange!13, draw=orange!70!black},
+  bad/.style   = {box, fill=red!11,    draw=red!60},
+  proj/.style  = {box, fill=violet!12, draw=violet!60},
+  fl/.style    = {-{Latex[length=2.0mm]}, draw=black!65, line width=0.55pt},
+  hd/.style    = {font=\sffamily\bfseries\footnotesize, anchor=west},
+  sub/.style   = {font=\sffamily\footnotesize\itshape, text=black!55, anchor=west},
+  note/.style  = {font=\sffamily\scriptsize, text=black!55, align=center},
+  lbl/.style   = {font=\sffamily\scriptsize, inner sep=1.5pt},
+]
+
+%======================= (a) the generative pipeline =======================
+\node[hd]  at (0,2.15) {(a) Continuous-token autoregressive pipeline};
+\node[sub] at (6.05,2.15) {the image setting, reproduced in 1-D so that $\dd$ can be varied};
+
+\node[stage, minimum width=2.10cm] (sig) at (1.05,1.0)  {};
+\node[font=\sffamily\scriptsize, anchor=north, align=center] at ($(sig.north)+(0,-0.05)$)
+     {signal window\\[-2pt]$7 \times 96$};
+\begin{scope}[shift={(sig.center)}]
+  \draw[blue!60, line width=0.45pt] plot[smooth,tension=0.75]
+    coordinates {(-0.88,-0.22) (-0.63,-0.05) (-0.38,-0.30) (-0.13,-0.10)
+                 (0.12,-0.34) (0.37,-0.12) (0.62,-0.28) (0.88,-0.08)};
+  \draw[red!50, line width=0.45pt] plot[smooth,tension=0.75]
+    coordinates {(-0.88,-0.36) (-0.63,-0.26) (-0.38,-0.12) (-0.13,-0.33)
+                 (0.12,-0.16) (0.37,-0.35) (0.62,-0.14) (0.88,-0.30)};
+\end{scope}
+
+\node[stage, minimum width=2.00cm] (enc) at (3.45,1.0) {patch VAE\\encoder};
+
+\node[stage, minimum width=2.20cm] (tok) at (5.90,1.0) {};
+\node[font=\sffamily\scriptsize, anchor=north, align=center] at ($(tok.north)+(0,-0.05)$)
+     {$T$ tokens\\[-2pt]$x_t \in \R^{\dd}$};
+\foreach \i/\c in {0/black!14, 1/black!28, 2/black!50, 3/black!28, 4/black!14}
+  {\fill[\c, draw=black!50, line width=0.3pt]
+     ($(tok.center)+(\i*0.27-0.54,-0.42)$) rectangle ++(0.20,0.21);}
+
+\node[stage, minimum width=2.00cm] (tf)  at (8.35,1.0) {masked AR\\transformer};
+\node[stage, minimum width=2.30cm] (mix) at (10.85,1.0) {Gaussian mixture\\[-1pt]\scriptsize over masked $x_t$};
+\node[stage, minimum width=1.60cm] (dec) at (13.15,1.0) {decoder};
+
+\foreach \a/\b in {sig/enc, enc/tok, tok/tf, tf/mix, mix/dec} {\draw[fl] (\a) -- (\b);}
+
+\node[note, anchor=north] at (5.90,0.28)
+  {$\dd$ is a constructor argument, not a fixed tokenizer width:\\[-2pt]
+   models retrained at $\dd = 4,8,16,32,64,128$};
+
+%======================= (b) one exact speculative step =======================
+\node[hd]  at (0,-0.95) {(b) One speculative step at token position $t$};
+\node[sub] at (6.05,-0.95) {exact verification, in the full $\R^{\dd}$};
+
+\node[draft, minimum width=2.60cm] (q) at (1.30,-1.80) {\textbf{draft} $q$\\[-2pt]\scriptsize width 128, depth 4};
+\node[targ, minimum width=2.60cm] (p) at (1.30,-3.10) {\textbf{target} $p$\\[-2pt]\scriptsize width 256, depth 6};
+
+\node[test, minimum width=2.30cm, minimum height=1.15cm] (ratio) at (4.75,-2.45)
+  {compare in $\R^{\dd}$\\[1pt]$\displaystyle\frac{p(x)}{q(x)}$};
+
+\draw[fl, draw=blue!70] (q.east) -- node[lbl,above,sloped]{propose $x\sim q$} (ratio.north west);
+\draw[fl, draw=red!70]  (p.east) -- node[lbl,below,sloped]{score $p(x)$}      (ratio.south west);
+
+\node[good, minimum width=3.00cm, minimum height=0.95cm] (acc) at (8.25,-1.80)
+  {\textbf{accept} w.p. $\min\{1,p/q\}$\\[-2pt]\scriptsize emit the proposal $x$};
+\node[warn, minimum width=3.00cm, minimum height=0.95cm] (rej) at (8.25,-3.10)
+  {\textbf{reject}: draw residual\\[-2pt]\scriptsize $r \propto (p-q)_+$};
+
+\draw[fl] (ratio.east) -- (acc.west);
+\draw[fl] (ratio.east) -- (rej.west);
+
+\node[good, minimum width=2.70cm, minimum height=1.15cm] (out) at (12.45,-2.45)
+  {emitted density\\[-1pt]$\tilde p = p$ \textbf{exactly}};
+\draw[fl] (acc.east) -- (out.west);
+\draw[fl] (rej.east) -- (out.west);
+
+\node[note, anchor=north] at (12.45,-3.12)
+  {lossless \emph{by identity}, not by measurement:\\[-2pt]
+   the zero point every fidelity metric must return};
+
+% Placed right of centre so that the "relax" arrow from (b) down to (c) has clear space on the left.
+\node[bad, minimum width=7.6cm, anchor=west] (prob) at (6.40,-4.45)
+  {\footnotesize\textbf{The obstruction (\S\ref{sec:collapse}).}\;
+   acceptance $=2-2\Phi(M/2)$ with $M=\delta\sqrt{\dd}$:\\[-1pt]
+   \footnotesize measured to fall $\mathbf{181\times}$ from $\dd{=}4$ to $\dd{=}128$ with $\delta$ held flat};
+
+%======================= (c) projected verification =======================
+\node[hd]  at (0,-5.30) {(c) The natural repair: verify a $\kk$-dimensional statistic instead};
+
+\node[proj, minimum width=3.30cm, minimum height=1.00cm] (A) at (1.65,-6.25)
+  {project $s = Ax$\\[-2pt]\scriptsize $A\in\R^{\kk\times\dd}$, orthonormal rows, $\kk<\dd$};
+\node[test, minimum width=2.70cm, minimum height=1.00cm] (ratio2) at (5.70,-6.25)
+  {compare in $\R^{\kk}$\\[1pt]$\displaystyle\frac{p_A(s)}{q_A(s)}$};
+
+\node[good, minimum width=4.30cm, minimum height=0.80cm] (gain) at (11.05,-5.80)
+  {\footnotesize acceptance \textbf{rises} to $2-2\Phi\!\big(\|A\delta\|/2\sigma\big)$};
+\node[bad,  minimum width=4.30cm, minimum height=0.80cm] (loss) at (11.05,-6.70)
+  {\footnotesize but $\|A_\perp\delta\|^{2}$ \textbf{escapes the test} and leaks};
+
+\draw[fl] (A) -- (ratio2);
+\draw[fl] (ratio2.east) -- (gain.west);
+\draw[fl] (ratio2.east) -- (loss.west);
+\draw[fl, draw=violet!70, line width=0.9pt] (ratio.south west) to[out=-115,in=75]
+  node[lbl, left, pos=0.52, text=violet!70!black]{\bfseries relax} (A.north);
+
+\node[proj, minimum width=6.9cm, minimum height=0.55cm, fill=violet!6, draw=violet!45]
+  (rules) at (3.60,-7.20)
+  {\scriptsize rules tested: random $\cdot$ pca $\cdot$ signal-top $\cdot$ dct-low $\cdot$ signal-bottom (anti-control)};
+
+%======================= the result =======================
+\node[test, minimum width=14.0cm, minimum height=1.30cm, align=center, fill=amber!18]
+  (cons) at (7.0,-8.55)
+  {\textbf{The result (\S\ref{sec:conservation}).}\quad
+   $\|A\delta\|^{2} + \|A_\perp\delta\|^{2} = \|\delta\|^{2}$\; for \emph{every} orthonormal $A$:
+   what the test sees and what escapes it are one conserved budget.\\[2pt]
+   \footnotesize Every rule, of every rank, therefore lands on \emph{one} acceptance/fidelity curve
+   (measured: all five rules within $\mathbf{4.0\%}$ of it over a $32\times$ range of $\dd$).
+   Only changing the model \emph{pair} moves the curve (\S\ref{sec:moving}).};
+
+\end{tikzpicture}}
+\caption{\textbf{The setting, the obstruction, and what this paper shows.}
+\textbf{(a)}~A masked autoregressive model over continuous tokens, the 1-D analogue of MAR
+\citep{li2024autoregressive}. Unlike an image tokenizer, whose latent width is fixed by the
+pretrained VAE, here $\dd$ is free, which is what makes an acceptance-versus-$\dd$ curve measurable.
+\textbf{(b)}~One exact step; rejection is repaired from the residual $(p-q)_+$, making the emitted
+density equal the target exactly (Eq.~\ref{eq:exact}). We use that identity as the zero point for
+every fidelity metric, and \S\ref{sec:metric} reports one that failed it.
+\textbf{(c)}~Verifying a $\kk$-dimensional statistic raises acceptance, but the divergence orthogonal
+to it goes unchecked and leaks; conservation makes these one quantity read twice.}
+\label{fig:overview}
+\end{figure}

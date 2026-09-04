@@ -1,0 +1,116 @@
+% The conservation identity, drawn three ways: the geometry that produces it, the two things the two
+% halves control, and the budget picture that makes the corollary obvious. Laid out as three columns
+% so the figure stays short enough for the main text's page budget.
+\begin{figure}[t]
+\centering
+\resizebox{0.90\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\sffamily\small,
+  hd/.style   = {font=\sffamily\bfseries\footnotesize, anchor=north west},
+  note/.style = {font=\sffamily\scriptsize, text=black!58, align=center},
+  lbl/.style  = {font=\sffamily\scriptsize, inner sep=1.5pt},
+  vec/.style  = {-{Latex[length=2.0mm]}, line width=0.9pt},
+]
+
+%=================== (a) the Pythagorean split ===================
+\node[hd] at (0,4.55) {(a) One vector, one split};
+
+\coordinate (O) at (0.45,0.95);
+% the verified subspace, drawn as a band through the origin
+\fill[blue!9] (0.20,0.74) rectangle (4.25,1.16);
+\draw[blue!45, line width=0.5pt] (0.20,0.95) -- (4.25,0.95);
+\node[lbl, text=blue!60!black, anchor=east] at (4.22,1.36) {verified subspace $\operatorname{row}(A)$};
+
+% arc of fixed radius: the total is the thing that does not move
+\draw[densely dashed, black!35] ($(O)+(0:3.05)$) arc (0:66:3.05);
+\node[note, anchor=west, text=black!45] at (2.42,3.62) {$\|\delta\|$ is fixed by\\[-2pt] the model pair};
+
+\coordinate (D) at (2.05,3.03);
+\coordinate (P) at (2.05,0.95);
+\draw[vec, black!80] (O) -- (D) node[pos=0.62, above left, lbl, inner sep=2pt]{$\delta=\mu_p-\mu_q$};
+\draw[vec, blue!70]  (O) -- (P) node[pos=0.5, below, lbl, text=blue!65!black]{$A\delta$ \emph{seen}};
+\draw[vec, red!70]   (P) -- (D) node[pos=0.5, right, lbl, text=red!65!black]{$A_\perp\delta$ \emph{escapes}};
+\draw[black!55, line width=0.4pt] ($(P)+(-0.19,0)$) -- ++(0,0.19) -- ++(0.19,0);
+
+\node[draw=black!45, rounded corners=2pt, fill=amber!18, inner sep=3.5pt, anchor=north, font=\small]
+  at (2.2,0.42) {$\|A\delta\|^{2} + \|A_\perp\delta\|^{2} = \|\delta\|^{2}$};
+\node[note, anchor=north, text width=4.6cm] at (2.2,-0.28)
+  {Rotating $A$ slides the split around the arc:\\[-2pt]
+   the two legs trade off, the total cannot change.};
+
+%=================== (b) what each leg controls ===================
+\node[hd] at (4.95,4.55) {(b) What each leg controls};
+
+\node[lbl, anchor=north west, text width=4.25cm] at (4.95,4.12)
+  {\textbf{Verified half.} The shaded overlap \emph{is} the acceptance rate.};
+
+% -- verified half: overlap is the acceptance rate
+\begin{scope}[shift={(5.15,2.82)}, xscale=0.60, yscale=0.52]
+  \draw[black!45, line width=0.4pt] (-0.3,0) -- (5.5,0);
+  % overlap = min of the two densities, drawn as two half-regions meeting at the crossing point
+  \fill[black!30, opacity=0.6]
+    plot[domain=-0.30:1.875,samples=32] (\x,{1.05*exp(-(\x-2.6)*(\x-2.6)/0.42)}) --
+    plot[domain=1.875:4.50,samples=32] (\x,{1.05*exp(-(\x-1.15)*(\x-1.15)/0.42)}) --
+    (4.50,0) -- (-0.30,0) -- cycle;
+  \draw[blue!65, line width=0.7pt] plot[domain=-0.30:3.10,samples=44]
+       (\x,{1.05*exp(-(\x-1.15)*(\x-1.15)/0.42)});
+  \draw[red!65, line width=0.7pt]  plot[domain=0.65:4.50,samples=44]
+       (\x,{1.05*exp(-(\x-2.6)*(\x-2.6)/0.42)});
+  % arrow set between the peaks rather than above them, which keeps the column short
+  \draw[{Latex[length=1.4mm]}-{Latex[length=1.4mm]}, blue!70, line width=0.6pt]
+       (1.15,0.60) -- node[lbl, above, text=blue!65!black, inner sep=1pt]{$\|A\delta\|$} (2.6,0.60);
+\end{scope}
+\node[lbl, anchor=north west, text width=4.25cm] at (4.95,2.30)
+  {\textbf{Unverified half.} This gap is never tested; it is emitted as-is.};
+
+% -- unverified half: leaks
+\begin{scope}[shift={(5.15,1.10)}, xscale=0.60, yscale=0.52]
+  \draw[black!45, line width=0.4pt] (-0.3,0) -- (5.5,0);
+  \draw[blue!65, line width=0.7pt] plot[domain=-0.30:2.60,samples=44]
+       (\x,{1.05*exp(-(\x-1.15)*(\x-1.15)/0.42)});
+  \draw[red!65, line width=0.7pt]  plot[domain=0.35:3.35,samples=44]
+       (\x,{1.05*exp(-(\x-1.85)*(\x-1.85)/0.42)});
+  \draw[{Latex[length=1.4mm]}-{Latex[length=1.4mm]}, red!70, line width=0.6pt]
+       (1.15,0.60) -- node[lbl, above, text=red!65!black, inner sep=1pt]{$\|A_\perp\delta\|$} (1.85,0.60);
+\end{scope}
+\node[note, anchor=north west, text width=4.25cm, align=left] at (4.95,0.55)
+  {A longer blue leg means fewer accepts; a longer red leg means a worse output. Neither can shrink
+   without the other growing.};
+
+%=================== (c) the budget ===================
+\node[hd] at (9.75,4.55) {(c) One budget, three ways to spend it};
+
+\draw[{Latex[length=1.6mm]}-{Latex[length=1.6mm]}, black!60, line width=0.5pt]
+  (10.55,3.92) -- node[lbl, below, inner sep=1.5pt]{$\KL(p\|q)=\|\delta\|^{2}/2\sigma^{2}$} (13.95,3.92);
+
+\foreach \i/\k/\frac in {0/{$\kk=1$}/0.14, 1/{$\kk=\dd/2$}/0.50, 2/{$\kk=\dd$}/1.00} {
+  \pgfmathsetmacro{\yy}{3.06 - \i*0.62}
+  \pgfmathsetmacro{\split}{10.55 + \frac*3.40}
+  \node[lbl, anchor=east] at (10.45,\yy) {\k};
+  \fill[blue!30, draw=blue!60, line width=0.4pt] (10.55,\yy-0.19) rectangle (\split,\yy+0.19);
+  \fill[red!22,  draw=red!60,  line width=0.4pt] (\split,\yy-0.19) rectangle (13.95,\yy+0.19);
+}
+\node[lbl, anchor=west, text=black!55] at (10.55,1.42) {every bar is the same length};
+
+\fill[blue!30, draw=blue!60, line width=0.4pt] (10.55,0.86) rectangle (10.82,1.06);
+\node[lbl, anchor=west, text=blue!65!black] at (10.90,0.96) {seen: costs acceptance};
+\fill[red!22,  draw=red!60,  line width=0.4pt] (10.55,0.36) rectangle (10.82,0.56);
+\node[lbl, anchor=west, text=red!65!black]  at (10.90,0.46) {escapes: costs fidelity};
+
+\node[note, anchor=north west, text width=4.3cm, align=left] at (9.75,-0.06)
+  {A rule chooses only \emph{where} to cut the bar. Shortening it takes a better
+   model pair (\S\ref{sec:moving}).};
+
+\end{tikzpicture}}
+\caption{\textbf{Why projected verification cannot help.}
+\textbf{(a)}~For a shared-covariance Gaussian pair the whole problem is one vector, the mean gap
+$\delta$, and an orthonormal $A$ splits it into a part the test sees and a part orthogonal to the
+test. Because the split is orthogonal, Pythagoras fixes the sum.
+\textbf{(b)}~Neither leg is abstract: the one the test sees sets the overlap of the projected
+densities, which \emph{is} the acceptance rate, and the one that escapes is emitted unchecked, which
+\emph{is} the fidelity cost.
+\textbf{(c)}~So the divergence is a fixed budget and the rank $\kk$ only picks where to spend it. No
+choice shortens the bar, which is what confines all five rules to one measured curve
+(Figure~\ref{fig:onefrontier}) and why \S\ref{sec:moving} attacks the bar's length instead.}
+\label{fig:conservation}
+\end{figure}
