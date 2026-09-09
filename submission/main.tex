@@ -1,3 +1,5 @@
+% tikz pulls in xcolor itself, so the table option has to be registered before any package loads it.
+\PassOptionsToPackage{table}{xcolor}
 \documentclass[10pt]{article}
 
 \usepackage{tmlr}
@@ -12,6 +14,18 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric,decorations.pathreplacing}
 \definecolor{amber}{RGB}{240,180,40}
+
+% Table shading. Light tints behind black text, rather than coloured numerals: the text stays fully
+% legible, the ramp survives greyscale printing as a grey gradient, and a single-hue lightness ramp
+% is readable under every common form of colour vision deficiency. Hues are the Okabe--Ito
+% bluish-green and vermillion, which stay distinguishable to deuteranopes and protanopes.
+\definecolor{hgood}{RGB}{0,145,105}
+\definecolor{hbad}{RGB}{205,85,15}
+\definecolor{hflat}{RGB}{70,90,125}
+% #1 is the tint strength in percent; keep it under ~45 so the cell never fights the numeral.
+\newcommand{\cgood}[2]{\cellcolor{hgood!#1}#2}
+\newcommand{\cbad}[2]{\cellcolor{hbad!#1}#2}
+\newcommand{\cflat}[1]{\cellcolor{hflat!13}#1}
 \usepackage{url}
 \usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
 
@@ -244,9 +258,11 @@ on held-out data, with $\sim$$25{,}000$ acceptance decisions per point.
 \toprule
 token dimension $\dd$ & 4 & 8 & 16 & 32 & 64 & 128 \\
 \midrule
-acceptance rate & 0.6425 & 0.4069 & 0.1743 & 0.0736 & 0.0178 & 0.0035 \\
+acceptance rate & \cgood{34}{0.6425} & \cgood{13}{0.4069} & \cbad{12}{0.1743} & \cbad{20}{0.0736}
+                & \cbad{30}{0.0178} & \cbad{40}{0.0035} \\
 standard error & 0.0021 & 0.0024 & 0.0020 & 0.0014 & 0.0007 & 0.0003 \\
-per-coordinate gap $\delta$ & 0.128 & 0.180 & 0.224 & 0.218 & 0.197 & 0.199 \\
+per-coordinate gap $\delta$ & 0.128 & 0.180 & \cflat{0.224} & \cflat{0.218} & \cflat{0.197}
+                            & \cflat{0.199} \\
 effective separation $M$ & 0.93 & 1.66 & 2.72 & 3.58 & 4.74 & 5.83 \\
 $M/\sqrt{\dd}$ & 0.464 & 0.586 & 0.679 & 0.633 & 0.593 & 0.515 \\
 \bottomrule
@@ -255,7 +271,10 @@ $M/\sqrt{\dd}$ & 0.464 & 0.586 & 0.679 & 0.633 & 0.593 & 0.515 \\
 separation implied by inverting $\bar{A} = 2 - 2\Phi(M/2)$. A log--log fit gives a growth exponent of
 $0.52 \pm 0.05$, consistent with the $\sqrt{\dd}$ law's $0.500$, and $M/\sqrt{\dd}$ is flat at
 $0.578 \pm 0.078$. Rates are shown to four decimals; the $181\times$ headline is computed from the
-unrounded values, which the displayed figures would round to $184\times$.}
+unrounded values, which the displayed figures would round to $184\times$.
+\emph{Shading.} Green above and orange below acceptance $0.5$, the rate at which speculation begins
+to pay (Appendix~\ref{app:practical}); slate marks the $\delta$ plateau, the control that makes the
+collapse dimensional rather than a training artefact.}
 \label{tab:e11}
 \end{table}
 
@@ -479,19 +498,21 @@ nats at $\dd{=}128$), and the residual sampler converges on $100.0\%$ of rejecti
 $\dd$ & cost range spanned & median deviation & max deviation & \textbf{max as \% of range} \\
  & (nats/token) & from one curve & from one curve & \\
 \midrule
-4   & 0.240  & 0.027 & 0.038 & 15.9\% \\
-8   & 1.560  & 0.017 & 0.112 & 7.2\% \\
-16  & 5.768  & 0.050 & 0.356 & 6.2\% \\
-32  & 11.341 & 0.331 & 0.950 & 8.4\% \\
-64  & 26.305 & 0.616 & 1.476 & 5.6\% \\
-128 & \textbf{48.016} & 0.777 & 1.933 & $\best{4.0\%}$ \\
+4   & 0.240  & 0.027 & 0.038 & \cgood{10}{15.9\%} \\
+8   & 1.560  & 0.017 & 0.112 & \cgood{22}{7.2\%} \\
+16  & 5.768  & 0.050 & 0.356 & \cgood{25}{6.2\%} \\
+32  & 11.341 & 0.331 & 0.950 & \cgood{19}{8.4\%} \\
+64  & 26.305 & 0.616 & 1.476 & \cgood{29}{5.6\%} \\
+128 & \textbf{48.016} & 0.777 & 1.933 & \cgood{40}{$\best{4.0\%}$} \\
 \bottomrule
 \end{tabular}
 \caption{Five subspace rules, one frontier, across a $32\times$ range of token dimension. Each rule's
 cost is compared against the random-projection curve interpolated to the \emph{same acceptance}.
 Costs vary over $48$ nats at $\dd{=}128$, yet no rule departs from a single curve by more than
 $\best{4.0\%}$ of that range, and the margin \emph{tightens} as $\dd$ grows. Energy-distance figures
-tell the same story and are in Appendix~\ref{app:results}.}
+tell the same story and are in Appendix~\ref{app:results}.
+\emph{Shading.} Deeper green is a \emph{smaller} departure, so the column darkening downwards is the
+evidence strengthening with dimension.}
 \label{tab:collapse}
 \end{table}
 
@@ -643,19 +664,21 @@ sensitive to.
 \toprule
 $\dd$ & acceptance before & acceptance after & gain & fidelity cost & projection cost for same rate \\
 \midrule
-4   & 0.6453 & \textbf{0.7198} & $\best{1.12\times}$ & $\best{0}$ \textbf{(exact)} & $0.188$ nats/token \\
-8   & 0.4018 & \textbf{0.4728} & $\best{1.18\times}$ & $\best{0}$ \textbf{(exact)} & $0.321$ nats/token \\
-16  & 0.1779 & \textbf{0.2507} & $\best{1.41\times}$ & $\best{0}$ \textbf{(exact)} & $0.613$ nats/token \\
-32  & 0.0722 & \textbf{0.1084} & $\best{1.50\times}$ & $\best{0}$ \textbf{(exact)} & $0.390$ nats/token \\
-64  & 0.0176 & \textbf{0.0459} & $\best{2.61\times}$ & $\best{0}$ \textbf{(exact)} & $0.366$ nats/token \\
-128 & 0.0036 & \textbf{0.0208} & $\best{5.72\times}$ & $\best{0}$ \textbf{(exact)} & $0.739$ nats/token \\
+4   & 0.6453 & \textbf{0.7198} & \cgood{12}{$\best{1.12\times}$} & $\best{0}$ \textbf{(exact)} & $0.188$ nats/token \\
+8   & 0.4018 & \textbf{0.4728} & \cgood{15}{$\best{1.18\times}$} & $\best{0}$ \textbf{(exact)} & $0.321$ nats/token \\
+16  & 0.1779 & \textbf{0.2507} & \cgood{20}{$\best{1.41\times}$} & $\best{0}$ \textbf{(exact)} & $0.613$ nats/token \\
+32  & 0.0722 & \textbf{0.1084} & \cgood{23}{$\best{1.50\times}$} & $\best{0}$ \textbf{(exact)} & $0.390$ nats/token \\
+64  & 0.0176 & \textbf{0.0459} & \cgood{32}{$\best{2.61\times}$} & $\best{0}$ \textbf{(exact)} & $0.366$ nats/token \\
+128 & 0.0036 & \textbf{0.0208} & \cgood{44}{$\best{5.72\times}$} & $\best{0}$ \textbf{(exact)} & $0.739$ nats/token \\
 \bottomrule
 \end{tabular}
 \caption{Distillation moves the frontier, and the gain \emph{grows} with the token dimension. Exact
 verification is lossless at every stage, so the acceptance gain is free (\textbf{bold}). The last
 column is what the projection frontier must spend in excess NLL to reach the same acceptance,
 interpolated from the measured curve: distillation buys it for nothing, which no rule in
-Table~\ref{tab:collapse} can do. $10{,}000$ steps per dimension, five stages.}
+Table~\ref{tab:collapse} can do. $10{,}000$ steps per dimension, five stages.
+\emph{Shading.} Green depth tracks the gain, so the deepening column \emph{is} the dimensional trend;
+the fidelity column is identically zero and so is left unshaded.}
 \label{tab:e14}
 \end{table}
 
