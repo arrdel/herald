@@ -27,7 +27,7 @@
 % Marks a headline result. \bm rather than \mathbf so that operators such as \times bold too.
 \newcommand{\best}[1]{\bm{#1}}
 
-\title{Acceptance Is Conserved in Continuous Speculative Sampling}
+\title{The Dimensionality Barrier in Continuous Speculative Sampling}
 
 % Under review the tmlr package prints "Anonymous authors" and ignores this block; it is
 % typeset only under the [accepted] or [preprint] options.
@@ -44,33 +44,29 @@
 \maketitle
 
 \begin{abstract}
-Autoregressive image generation is latency-bound: a masked autoregressive model spends almost all of
-its time drawing continuous latent tokens one at a time from a sequential per-token diffusion head.
-Speculative sampling is the standard remedy and it changes nothing about the output distribution, so
-it ought to apply directly. It does not, because the exact acceptance rule degrades catastrophically
-as the token dimension grows. We measure the collapse in a controlled sweep where only the latent
-width changes: acceptance falls $\best{181\times}$ from $\dd{=}4$ to $\dd{=}128$, with the effective
-separation growing as $\dd^{0.52}$ against the $\sqrt{\dd}$ law's $0.5$. The remedy image processing
-suggests is to change basis and verify only the coefficients that matter, exactly as transform coding
-keeps a low-frequency band and discards the rest. We show this cannot work, for a reason that is also
-standard image processing: verification is governed not by the energy of the signal but by the energy
-of the draft--target disagreement, and Parseval's theorem fixes that total in every orthonormal basis.
-What the test sees and what escapes it sum to a constant, so each choice of verified subspace merely
-selects a point on one curve fixed by the model pair. We test the prediction against five subspace
-rules, among them the low-frequency DCT band and an adversarial anti-control that verifies the least
-important directions. Across six token dimensions their costs span $48$ nats, yet at matched
-acceptance every rule lies within $\best{4.0\%}$ of the range of one curve, and the anti-control ranks
-best at the three largest dimensions, which is what a noise ordering looks like. On the real image
-tokenizer the premise fails as well: the KL16 decoder that MAR uses is close to isotropic over the top
-$64$ of $4096$ latent directions, with a gain spread of $\best{3.31\times}$ and an effective rank of
-$61$ of $64$, so there is no compact perceptual band to keep in the first place. The corollary is
-constructive: the only lever is the divergence itself. Distilling the draft towards
-the target moves the frontier rather than sliding along it, raising lossless acceptance by
-$\best{5.72\times}$ at $\dd{=}128$ \textbf{at zero fidelity cost}, a gain the best projection rule can
-buy only by leaking $0.74$ nats per token. That gain \emph{grows} with dimension, so the one
-intervention the conservation law permits is also the one that scales with the obstruction. Finally, we show that a
-published continuous speculative decoder applies its trajectory normalisation inverted, making its
-acceptance ratio wrong by the square of a factor we bound at $\best{e^{161}}$.
+Speculative sampling accelerates autoregressive generation without changing the output distribution,
+which makes it the natural remedy for continuous-token image models such as MAR, where a sequential
+per-token diffusion head consumes almost all of the wall time. We show that exact acceptance instead
+deteriorates rapidly with the token dimension. In a controlled dimension-indexed sweep, acceptance
+falls $\best{181\times}$ as the token widens from $\dd{=}4$ to $\dd{=}128$ while the per-coordinate
+draft--target disagreement stays flat, and a training-free Gaussian reference reproduces the same
+curve out to $\dd{=}4096$. We then ask whether the natural repair works: verify only a
+low-dimensional projection of each token, as transform coding keeps a low-frequency band and discards
+the rest. It cannot remove the obstruction. Splitting a token into a verified statistic and its
+complement leaves the total draft--target divergence exactly unchanged, by the chain rule for KL and
+with no Gaussian assumption; projection converts divergence that the test would have seen into
+divergence that escapes it. For shared-covariance Gaussians this becomes a closed-form
+acceptance--fidelity frontier, and a subspace rule can only choose a point on that frontier rather
+than move it. Across five substantially different rules, including the low-frequency DCT band and an
+adversarial anti-control that verifies the least important directions, measured costs span $48$ nats
+yet every rule lies within $\best{4.0\%}$ of a single curve. Two further measurements support the
+same reading: the KL16 decoder MAR uses shows no compact perceptual band among the top $64$ of
+$4096$ latent directions, and distilling the draft towards the target, which changes the divergence
+itself rather than where it is paid, moves the frontier and raises lossless acceptance by
+$\best{5.72\times}$ at $\dd{=}128$ at zero fidelity cost. The practical consequence is a feasibility
+rule: holding acceptance at $0.5$ demands per-coordinate agreement within $0.34\sigma$ at
+$\dd{=}16$ but within $0.021\sigma$ at $\dd{=}4096$, so for continuous speculative verification
+reducing draft--target divergence matters more than designing a better projection.
 \end{abstract}
 
 \section{Introduction}
@@ -122,65 +118,51 @@ verification the recipe writes itself: do not verify the token, verify a statist
 the rest through unchecked. This is intuitive, it is what every image pipeline does, and for
 verification it is wrong.
 
-It is wrong for a reason that is also standard image processing. Parseval's theorem says an
-orthonormal change of basis preserves energy, and the energy governing verification is not the
-signal's but the \emph{disagreement} between draft and target, which is not a signal anyone gets to
-design a basis for. In any basis, what the test sees and what escapes it sum to a constant, so
-acceptance bought by looking away is paid for in exactly the fidelity that went unchecked. Energy
-compaction has nothing to compact.
+It is wrong for a reason that needs no distributional assumption at all. Splitting a token into a
+verified statistic and its complement leaves the total draft--target divergence exactly where it
+was; all a projection can do is move divergence out of the test's view and into what the test lets
+through. Acceptance bought by looking away is paid for in exactly the fidelity that went unchecked.
+The compaction the analogy needs would have to be compaction of the draft--target
+\emph{disagreement}, and that is not a signal anyone gets to design a basis for.
 
-\paragraph{Contributions.}
+\paragraph{Contributions.} The paper makes one argument in three steps.
+
 \begin{itemize}
 \itemsep2pt
-\item \textbf{The collapse, measured cleanly} (\S\ref{sec:collapse}). We build a controlled testbed in
-which the token dimension is the only variable and measure acceptance over $\dd \in \{4,\dots,128\}$.
-Acceptance falls $181\times$; the effective separation scales as $\dd^{0.519}$ against the $\sqrt{\dd}$
-law's $0.5$; and the per-coordinate gap is flat from $\dd{=}16$ on, so the collapse is dimensional
-rather than a training artefact. We rule out the obvious confound with matched-convergence controls.
+\item \textbf{A dimensionality barrier for exact continuous verification} (\S\ref{sec:collapse}).
+Across a dimension-indexed family of matched models, acceptance falls $181\times$ from $\dd{=}4$ to
+$\dd{=}128$ while the per-coordinate disagreement stays flat from $\dd{=}16$ on, so the collapse is
+dimensional rather than a training artefact; matched-convergence controls rule out the obvious
+confound, and a training-free Gaussian reference traces the same curve to $\dd{=}4096$.
 
-\item \textbf{A conservation law for projected verification} (\S\ref{sec:conservation}). We prove
-that for shared-covariance Gaussians the divergence visible to an orthonormal statistic and the
-divergence that escapes it sum to a constant independent of the statistic: a Parseval identity for
-the draft--target gap rather than for the signal. Acceptance and fidelity are therefore not
-independently controllable, and no choice of subspace can beat any other. We confirm this on real
-models over six token dimensions and five subspace rules, among them the transform-coding rule that
-verifies a low-frequency DCT band and an adversarial anti-control that verifies the least important
-directions: costs spanning $48$ nats collapse to within $\best{4.0\%}$ of a single curve, and the
-margin tightens as $\dd$ grows.
+\item \textbf{Projection redistributes divergence and cannot reduce it} (\S\ref{sec:conservation}).
+Splitting a token into a verified statistic and its complement leaves the total draft--target KL
+exactly unchanged, for arbitrary densities and by the chain rule alone; what a projection can do is
+convert divergence the test would have seen into divergence that escapes it. Under shared-covariance
+Gaussians this yields a closed-form acceptance--fidelity frontier that a subspace rule can select a
+point on but not move. Five rules whose costs span $48$ nats, including the transform-coding DCT
+band and an adversarial anti-control, all lie within $\best{4.0\%}$ of one curve; and the KL16
+decoder MAR uses shows no compact perceptual band for such a rule to exploit (\S\ref{sec:kl16}).
 
-\item \textbf{The premise fails on the real image tokenizer too} (\S\ref{sec:kl16}). Independently of
-the conservation law, projected verification needs a few latent directions to dominate perceptually.
-We measure the local Jacobian spectrum of the KL16 decoder that MAR actually uses, on ImageNet
-latents, and find the opposite: over the top $64$ of $4096$ directions the gain spread is only
-$3.31\times$ with an effective rank of $61$ of $64$. Where it matters, the image decoder is close to
-isotropic, so there is no compact perceptual band to verify even before conservation forbids the
-gain.
-
-\item \textbf{A fidelity metric that cannot be gamed} (\S\ref{sec:metric}). Signal-domain squared
-error against ground truth rewards variance shrinkage, and under it every relaxed rule scores
-\emph{negative} excess distortion while the anti-control looks best. We report this failure and
-replace it with an energy distance that is zero exactly when the decoded distributions agree.
-
-\item \textbf{The lever that does work} (\S\ref{sec:moving}). Because the frontier is a property of
-the model pair, the only way to improve it is to shrink the divergence. Mode-covering distillation of
-the draft raises lossless acceptance at all six dimensions, by $\best{5.72\times}$ at $\dd{=}128$,
-reaching \textbf{at zero fidelity cost} rates that projection can buy only by spending up to $0.74$
-nats per token. The gain grows monotonically with $\dd$, which the conservation law predicts and
-which no verification rule can imitate.
-
-\item \textbf{A correction to a published criterion} (\S\ref{sec:cspd}). Continuous speculative
-decoding \citep{wang2025continuous} multiplies its acceptance ratio by an accumulated-variance factor
-that is the \emph{reciprocal} of the trajectory normaliser its own derivation requires. The ratio is
-therefore wrong by the square of that factor, whose exponent we bound at $\best{161.5}$.
+\item \textbf{Changing the model pair moves the frontier} (\S\ref{sec:moving}). Because the frontier
+is fixed by $\|\delta\|/\sigma$, the constructive reading is that the divergence itself is the thing
+to attack. Mode-covering distillation raises lossless acceptance at every dimension, by
+$\best{5.72\times}$ at $\dd{=}128$ at \textbf{zero} fidelity cost, a rate projection reaches only by
+leaking $0.74$ nats per token, and the gain \emph{grows} with $\dd$. The resulting feasibility map
+(Figure~\ref{fig:feasibility}) states what per-coordinate agreement a pair needs at a given width.
 \end{itemize}
 
-\paragraph{On the testbed.} The claim is about image generation but the sweep runs on one-dimensional
-signals, which is instrument design rather than convenience. Every quantity here is a function of the
-token dimension $\dd$, and KL16 is welded to $\dd = 16$, so an image pipeline yields one point on the
-curve we need to see. Our testbed is a structural replica of MAR in which $\dd$ is a constructor
-argument and everything else is held fixed, and the sweep \emph{contains} $\dd = 16$, so the image
-pipeline's operating point is measured rather than extrapolated. \S\ref{sec:setup} gives the
-correspondence component by component, \S\ref{sec:kl16} returns to the real tokenizer, and
+Two supporting results are reported in the appendix: a fidelity metric that squared error gets
+wrong, since signal-domain distortion rewards the variance shrinkage a degenerate sampler would
+exploit (Appendix~\ref{app:metric}), and an audit of the trajectory normalisation in prior
+continuous speculative decoding (Appendix~\ref{app:cspd}).
+
+\paragraph{On the testbed.} The claim is about image generation but the sweep runs on
+one-dimensional signals, which is instrument design rather than convenience: every quantity here is
+a function of $\dd$, and KL16 is welded to $\dd = 16$, so an image pipeline yields one point on the
+curve we need to see. Our testbed is a structurally matched continuous-token autoregressive system
+in which $\dd$ is a constructor argument, not a MAR image model, and the sweep \emph{contains}
+$\dd = 16$. \S\ref{sec:setup} gives the correspondence component by component and
 \S\ref{sec:limits} states what the substitution does not buy.
 
 \section{Setup}
@@ -214,10 +196,16 @@ training details are in Appendix~\ref{app:setup}.
 against MAR component by component. The two pipelines have the same shape; what differs is that the
 image tokenizer's latent width is fixed by a released checkpoint while ours is a constructor
 argument. We retrain the tokenizer and both models at each $\dd$, holding data, architecture shape,
-optimiser, and step budget fixed, so that $\dd$ is the only thing that moves. The transform-domain
-structure that \S\ref{sec:conservation} exploits carries over directly: the DCT of a
-one-dimensional window plays the role the two-dimensional DCT plays in a JPEG codec, and in both
-cases it is an orthonormal change of basis on the decoder's input.
+optimiser, and step budget fixed. This is a \emph{dimension-indexed family of matched systems}, not a
+single-variable intervention, and the distinction is worth stating plainly: because the VAE is
+retrained at every width, the latent representation the models see changes with $\dd$ as well. We
+therefore do not rest the claim on this sweep alone. The matched-$\delta$ controls of
+\S\ref{sec:collapse} compare checkpoints that reach identical per-coordinate agreement, and the
+training-free Gaussian reference in Figure~\ref{fig:feasibility}(a) isolates the dimensional
+contribution with no learned component at all. The transform-domain structure that
+\S\ref{sec:conservation} exploits carries over directly: the DCT of a one-dimensional window plays
+the role the two-dimensional DCT plays in a JPEG codec, and in both cases it is an orthonormal
+change of basis on the decoder's input.
 
 \begin{table}[t]
 \centering
@@ -264,18 +252,22 @@ $M/\sqrt{\dd}$ & 0.464 & 0.586 & 0.679 & 0.633 & 0.593 & 0.515 \\
 \bottomrule
 \end{tabular}
 \caption{Exact acceptance collapses $181\times$ over a $32\times$ range of token dimension. $M$ is the
-separation implied by inverting $\bar{A} = 2 - 2\Phi(M/2)$. Its growth exponent is $0.519$ against the
-$\sqrt{\dd}$ law's $0.500$, and $M/\sqrt{\dd}$ is flat at $0.578 \pm 0.071$.}
+separation implied by inverting $\bar{A} = 2 - 2\Phi(M/2)$. A log--log fit gives a growth exponent of
+$0.52 \pm 0.05$, consistent with the $\sqrt{\dd}$ law's $0.500$, and $M/\sqrt{\dd}$ is flat at
+$0.578 \pm 0.078$. Rates are shown to four decimals; the $181\times$ headline is computed from the
+unrounded values, which the displayed figures would round to $184\times$.}
 \label{tab:e11}
 \end{table}
 
-Table~\ref{tab:e11} shows the collapse and identifies its mechanism (Figure~\ref{fig:collapse} in Appendix~\ref{app:results} plots it). Acceptance falls from $0.64$ to
-$0.0035$, a factor of $181$. Inverting the Gaussian acceptance formula gives an effective separation
-$M$ that grows as $\dd^{0.519}$, against $0.500$ for the $\sqrt{\dd}$ law, with $M/\sqrt{\dd}$ flat
-across the sweep. Critically, the per-coordinate gap $\delta$ is \emph{constant} from $\dd = 16$
-onwards. The models agree just as well at $\dd = 128$ as at $\dd = 16$ on any single coordinate, and
-acceptance still falls $50\times$ over that range, purely because the disagreement is accumulated
-over more coordinates.
+Table~\ref{tab:e11} shows the collapse and identifies its mechanism (Figure~\ref{fig:collapse} in
+Appendix~\ref{app:results} plots it). Acceptance falls from $0.64$ to $0.0035$, a factor of $181$.
+Inverting the Gaussian acceptance formula gives an effective separation $M$ that tracks the
+$\sqrt{\dd}$ law closely: a log--log fit returns an exponent of $0.52$ with a standard error of
+$0.05$, so the $95\%$ interval $[0.37, 0.67]$ contains $0.5$ comfortably and we claim no departure
+from it. What matters is not the second digit of that exponent but the collapse it drives. Critically,
+the per-coordinate gap $\delta$ is \emph{constant} from $\dd = 16$ onwards. The models agree just as
+well at $\dd = 128$ as at $\dd = 16$ on any single coordinate, and acceptance still falls $50\times$
+over that range, purely because the disagreement is accumulated over more coordinates.
 
 \paragraph{Ruling out the training confound.} A fixed step budget could make high-$\dd$ models simply
 less converged. We reject this two ways. First, convergence traces at $\dd \in \{16,128\}$ show both
@@ -286,7 +278,19 @@ $\sim$$60\times$ penalty from $\dd{=}16$ to $\dd{=}128$ (median over $15$ pairs)
 per-coordinate agreement, dimension alone costs a factor of $60$. Traces are in
 Appendix~\ref{app:convergence}.
 
-\section{Projection Cannot Help: A Conservation Law}
+\paragraph{A reference curve that trains nothing.} Because the tokenizer is retrained at each width,
+the sweep is a matched family rather than a single-variable intervention (\S\ref{sec:setup}), and the
+cleanest way to see what dimension alone does is to remove the models entirely. For shared-covariance
+Gaussians with a fixed per-coordinate gap, acceptance is $2 - 2\Phi(\delta\sqrt{\dd}/2)$ and nothing
+else varies. Figure~\ref{fig:feasibility}(a) plots that curve out to $\dd = 4096$, with a direct
+Monte Carlo of the accept/reject rule agreeing with the closed form to $6.5\times10^{-4}$. At the
+measured $\delta/\sigma = 0.578$ the analytic curve passes through the trained points, so the
+learned sweep is a noisy sample of an analytic law rather than a property of our architecture: the
+collapse survives to $\dd = 256$ and beyond, where exact acceptance is below $10^{-5}$.
+
+\input{fig_feasibility.tex}
+
+\section{Projection Redistributes the Divergence It Cannot Reduce}
 \label{sec:conservation}
 
 \subsection{Projected verification and its null control}
@@ -313,73 +317,109 @@ $\kk$-dimensional subspace}: rules reaching the same subspace by different const
 Before asking which subspace is best, one must ask whether the choice matters at all. Any dimension
 reduction raises acceptance for free reasons (the $h^\dd$ scaling \citet{fearnhead2012constructing}
 identify in ABC), so a structureless projection is the mandatory null control. Across the full sweep,
-acceptance under random subspaces is a function of the verified dimension $\kk$ \emph{alone}: at
-$\kk=4$ the mean rate is $0.624$ over $\dd \in \{4,\dots,128\}$ with a coefficient of variation of
-$2.5\%$, and over $\kk \in \{1,\dots,32\}$ that variation stays between $1.3\%$ and $12.3\%$. A random
-projection lifts acceptance at $\dd{=}128$ from $0.0035$ to $0.64$, a $180\times$ gain, while knowing
-nothing about the model. Acceptance alone therefore cannot tell a good statistic from a worthless one,
-and the question moves entirely to what each rule \emph{costs}.
+acceptance under random subspaces is very nearly a function of the verified dimension $\kk$
+\emph{alone}: at $\kk=4$ the mean rate is $0.624$ over $\dd \in \{4,\dots,128\}$ with a coefficient of
+variation of $2.5\%$, and over $\kk \in \{1,\dots,32\}$ that variation stays between $1.3\%$ and
+$12.3\%$. Proposition~\ref{prop:random} below derives this rather than leaving it as an observation. A
+random projection lifts acceptance at $\dd{=}128$ from $0.0035$ to $0.64$, a $180\times$ gain, while
+knowing nothing about the model. Acceptance alone therefore cannot tell a good statistic from a
+worthless one, and the question moves entirely to what each rule \emph{costs}.
 
-\subsection{The conservation identity}
+\subsection{What projection can and cannot do}
 
-\begin{proposition}[Conservation of divergence under an orthonormal split]
+The first fact costs no assumptions at all. Verifying a statistic and letting the complement through
+does not destroy any divergence; it moves divergence out of the test's view.
+
+\begin{proposition}[Divergence is split, never reduced]
+\label{prop:split}
+Let $p, q$ be densities on $\R^\dd$ and let $R = [A; A_\perp]$ be orthogonal, so $x \mapsto (s,u) =
+(Ax, A_\perp x)$ is a bijection. Then
+\begin{equation}
+\KL(p \,\|\, q) \;=\; \underbrace{\KL(p_A \,\|\, q_A)}_{\text{seen by the test}}
+\;+\; \underbrace{\E_{p_A}\!\left[\KL\bigl(p(u \mid s) \,\|\, q(u \mid s)\bigr)\right]}_{\text{escapes the test}},
+\label{eq:split}
+\end{equation}
+and the left-hand side does not depend on $A$.
+\end{proposition}
+
+This is the chain rule for KL applied to a bijection (Appendix~\ref{app:proofs}); it needs no
+Gaussian assumption, no shared covariance, and no structure in $\delta$. It already says the thing
+the design intuition gets wrong. A verifier chooses $A$, and thereby chooses how to \emph{divide} a
+total it cannot alter; acceptance is bought from the first term and paid for in the second.
+
+Adding shared-covariance Gaussians turns the split into a curve with a closed form.
+
+\begin{proposition}[Gaussian conservation and the closed-form frontier]
 \label{prop:conservation}
 Let $p = \mathcal{N}(\mu_p, \sigma^2 I)$ and $q = \mathcal{N}(\mu_q, \sigma^2 I)$ on $\R^\dd$ with
-$\delta = \mu_p - \mu_q$. Let $A \in \R^{\kk\times\dd}$ have orthonormal rows and let $A_\perp$ be an
-orthonormal basis of the complementary subspace. Then
+$\delta = \mu_p - \mu_q$, and let $A \in \R^{\kk\times\dd}$ have orthonormal rows. The conditional
+term in Eq.~\ref{eq:split} is then the marginal $\KL(p_{A_\perp} \| q_{A_\perp})$, and
 \begin{equation}
 \KL(p_A \,\|\, q_A) \;+\; \KL(p_{A_\perp} \,\|\, q_{A_\perp}) \;=\; \KL(p \,\|\, q)
-\;=\; \frac{\|\delta\|^2}{2\sigma^2},
+\;=\; \frac{\|\delta\|^2}{2\sigma^2}.
 \label{eq:conservation}
 \end{equation}
-a quantity independent of $A$. Moreover the projected acceptance rate is
-$2 - 2\Phi\!\left(\|A\delta\|/2\sigma\right)$, a function of $\|A\delta\|^2$ alone.
+Moreover the projected acceptance rate is $2 - 2\Phi\!\left(\|A\delta\|/2\sigma\right)$, a function of
+$\|A\delta\|^2$ alone.
 \end{proposition}
 
 \input{fig_conservation.tex}
 
-The proof is the Pythagorean identity $\|A\delta\|^2 + \|A_\perp\delta\|^2 = \|\delta\|^2$
-(Appendix~\ref{app:proofs}), drawn in Figure~\ref{fig:conservation}. Its consequence is this paper's
-central claim: acceptance is governed by what the statistic \emph{sees}, $\|A\delta\|^2$, the fidelity
-cost by what \emph{escapes} it, $\|A_\perp\delta\|^2$, and Eq.~\ref{eq:conservation} fixes their sum,
-so neither falls without the other rising.
+Here the split is the Pythagorean identity $\|A\delta\|^2 + \|A_\perp\delta\|^2 = \|\delta\|^2$
+(Appendix~\ref{app:proofs}), drawn in Figure~\ref{fig:conservation}: what the statistic \emph{sees}
+sets acceptance, what \emph{escapes} it sets the fidelity cost, and their sum is pinned. Because both
+coordinates of the trade-off are functions of the single quantity $\|A\delta\|^2$, eliminating it
+leaves one curve.
 
-\begin{corollary}
+\begin{corollary}[One frontier]
 \label{cor:frontier}
-Every orthonormal statistic, of every rank, lies on a single acceptance--fidelity curve determined by
-$\|\delta\|/\sigma$. Choosing \emph{which} directions to verify cannot outperform choosing \emph{how
-many}, and no subspace selection rule can dominate another.
+Under Proposition~\ref{prop:conservation}, every orthonormal statistic of every rank lies on a single
+acceptance--fidelity frontier determined by $\|\delta\|/\sigma$. A subspace rule selects a
+\emph{point} on that frontier; it cannot move the frontier itself.
 \end{corollary}
 
-This reframes the design problem: the anti-control is not bad because it is unlucky but because it
-spends the budget at the high-acceptance end, and a perceptually motivated projection cannot escape
-the curve, only relocate on it. It also explains the null control's result, since a uniformly random
-$\kk$-dimensional subspace captures $\kk/\dd$ of $\|\delta\|^2$ in expectation regardless of $\dd$,
-which is exactly why acceptance came out as a function of $\kk$ alone.
+The distinction matters, because subspace choice emphatically does change acceptance: at
+$\dd{=}128, \kk{=}16$ our rules span $0.018$ to $0.550$, a $30\times$ range. What Corollary~\ref{cor:frontier}
+denies is not that rules differ but that any of them buys acceptance more cheaply than another. The
+anti-control is not bad luck; it sits at the high-acceptance, high-leakage end of the same curve.
 
-\paragraph{Why transform coding does not transfer.} Eq.~\ref{eq:conservation} is Parseval's theorem
-wearing a different hat, and it is worth saying plainly what that costs, because the intuition it
-overturns is a good one. Transform coding rests on \emph{energy compaction}
-\citep{goyal2001transform}. Natural images are
-smooth, so the DCT packs nearly all of their energy into a few low-frequency coefficients, and a codec
-can quantise or discard the rest and still reconstruct a convincing picture. The transform does not
-create that concentration, it reveals it; JPEG works because the statistics of natural images really
-are concentrated in that band.
+\paragraph{Random subspaces at finite $\dd$.} The null control's behaviour follows from the same
+picture, and deriving it properly is worth the half page because the obvious argument is invalid.
+One cannot substitute $\E\|A\delta\|^2 = (\kk/\dd)\|\delta\|^2$ into the acceptance formula, since
+$z \mapsto 2 - 2\Phi(\sqrt{z}/2\sigma)$ is nonlinear and $\E[f(Z)] \ne f(\E Z)$; on our sweep that
+step errs by $2.8$--$8.8\%$. The correct statement uses the exact law of the captured fraction.
 
-Verification asks the same question about a different object. What has to be checked is not the token
-but the discrepancy $\delta = \mu_p - \mu_q$ between what the draft predicts and what the target
-predicts, and Parseval applies to $\delta$ exactly as it applies to an image. That is precisely the
-difficulty. The identity says the total is invariant, so an orthonormal change of basis can only
-\emph{redistribute} the discrepancy between the coefficients we inspect and the ones we do not.
-For compression that invariance is harmless, because the payoff comes from $\delta$ being
-concentrated in the first place. For verification there is no reason to expect any concentration:
-two separately trained networks disagree wherever they happen to disagree, and nothing in either
-training objective aligns that disagreement with the low-frequency band or with any other nameable
-subspace. The asymmetry is one of information. A codec picks its basis already knowing the statistics
-of what it will encode, whereas a verifier must pick a basis before knowing where the two models will
-differ. Discarding high frequencies in JPEG discards content known to carry little energy; discarding
-them in a verifier declines to check content whose energy has not been measured, and
-Eq.~\ref{eq:conservation} guarantees that whatever goes unchecked is emitted in full.
+\begin{proposition}[Random subspaces]
+\label{prop:random}
+For $A$ uniform on the Stiefel manifold, $Z = \|A\delta\|^2/\|\delta\|^2 \sim
+\operatorname{Beta}(\kk/2, (\dd-\kk)/2)$, so the expected acceptance is
+$\E_Z\bigl[2 - 2\Phi(M\sqrt{Z}/2)\bigr]$ with $M = \|\delta\|/\sigma$. If the per-coordinate gap is
+held fixed, so that $M = c\sqrt{\dd}$, then $M^2 Z \Rightarrow c^2 \chi^2_\kk$ as $\dd \to \infty$
+with $\kk$ fixed, a limit free of $\dd$.
+\end{proposition}
+
+So acceptance under a random subspace is asymptotically a function of $\kk$ alone, with an $O(1/\dd)$
+correction rather than by coincidence. Evaluating the exact Beta expression over $\dd \in \{16,\dots,4096\}$
+gives a coefficient of variation across dimensions of $0.15\%$ at $\kk{=}1$ and $1.7\%$ at $\kk{=}32$,
+which is the analytic counterpart of the $1.3\%$--$12.3\%$ we measure on trained models.
+
+\paragraph{Why transform coding does not transfer.} The intuition Eq.~\ref{eq:conservation} overturns
+is a good one, so it is worth saying exactly where it breaks. Transform coding rests on \emph{energy
+compaction} \citep{goyal2001transform}: natural images are smooth, the DCT packs nearly all of their
+energy into a few low-frequency coefficients, and a codec discards the rest and still reconstructs a
+convincing picture. The transform does not create that concentration, it reveals it.
+
+Verification asks the same question about a different object. What must be checked is not the token
+but the discrepancy $\delta = \mu_p - \mu_q$, and Parseval applies to $\delta$ exactly as it applies
+to an image, which is precisely the difficulty: an orthonormal change of basis can only
+\emph{redistribute} $\delta$ between the coefficients we inspect and the ones we do not. For
+compression the invariance is harmless because the payoff comes from concentration that is already
+there. For verification there is no reason to expect any: two separately trained networks disagree
+wherever they happen to disagree, and neither training objective aligns that disagreement with the
+low-frequency band or any other nameable subspace. The asymmetry is informational. A codec picks its
+basis knowing the statistics of what it will encode; a verifier must pick one before knowing where
+the two models will differ, and Eq.~\ref{eq:conservation} guarantees that whatever goes unchecked is
+emitted in full.
 
 \subsection{Testing the prediction against five subspace rules}
 \label{sec:metric}
@@ -419,7 +459,9 @@ outright while being a useless sampler. We therefore report two costs without th
 \begin{itemize}
 \itemsep1pt
 \item \textbf{Excess NLL under the target}, $\E_{\tilde p}[-\log p] - \E_{p}[-\log p]$, in nats per
-token. Zero when the rule is lossless.
+token. This is a zero-anchored cross-entropy discrepancy, not a divergence: it vanishes when
+$\tilde p = p$, but it is neither $\KL(\tilde p \| p)$ nor guaranteed non-negative, so we read its
+\emph{sign} as diagnostic and its magnitude only in comparison across rules at matched acceptance.
 \item \textbf{Signal-domain energy distance}, $2\E\|X-Y\| - \E\|X-X'\| - \E\|Y-Y'\|$ between decoded
 emitted waveforms $X,X'$ and decoded target waveforms $Y,Y'$ under matched conditioning. It is zero
 exactly when the decoded distributions agree, and the $-\E\|X-X'\|$ term \emph{penalises} the mode
@@ -483,7 +525,8 @@ $\dd{=}128$, $\kk{=}16$) while the decoder-Jacobian rule ranks worst there. Once
 fixed, a rule designed to be maximally stupid is indistinguishable from one built with full knowledge
 of the decoder. Second, the rules differ enormously at matched $\kk$: at $\dd{=}128,\kk{=}16$
 acceptance spans $0.018$ (pca) to $0.550$ (anti-control), a $30\times$ range, so these are genuinely
-different rules landing on the same curve.
+different rules landing on the same curve, which is the distinction
+Corollary~\ref{cor:frontier} draws between choosing a point and moving the frontier.
 
 Third, and this is the one that matters for an image pipeline, the transform-coding rule is not a
 strawman and still gains nothing. At $\dd{=}128, \kk{=}16$, \textbf{dct-low} and the anti-control are
@@ -492,21 +535,17 @@ $0.550$) and by $24.7$ nats in cost, and yet both sit within $4.0\%$ of the same
 \textbf{dct-low} weak on its own terms: it tracks \textbf{signal-top} to within a few thousandths in
 every cell of the appendix table, so the low-frequency band and the directions the decoder is most
 sensitive to are very nearly the same subspace. The JPEG heuristic identifies the perceptually
-important directions correctly; Corollary~\ref{cor:frontier} predicts that identifying them correctly
-buys nothing, and it does not.
-This also refines the null control's finding: acceptance depends on $\kk$ alone for \emph{random}
-subspaces, which are exchangeable by rotational symmetry, but a structured subspace can deliberately
-sit where $p$ and $q$ agree and buy a much higher rate. It gains nothing by doing so.
+important directions correctly, and identifying them correctly is what buys nothing.
 
-\section{The Real Image Tokenizer Has No Band to Keep}
+\section{Is There a Perceptual Band to Keep?}
 \label{sec:kl16}
 
-Corollary~\ref{cor:frontier} says that identifying the perceptually important directions cannot buy
-anything. It is worth asking the prior question as well, on the actual image model rather than the
-testbed: are there such directions to identify? Projected verification is motivated by the picture in
-which a handful of latent directions dominate what the viewer sees and the rest are slack. If the
-KL16 decoder were built that way, the transform-coding intuition would at least be attacking a real
-structure, and conservation would be the only thing standing in its way. We measured whether it is.
+Corollary~\ref{cor:frontier} says that identifying the perceptually important directions cannot move
+the frontier. It is worth asking the prior question as well, on the actual image model rather than
+the testbed: are there such directions to identify? Projected verification is motivated by the
+picture in which a handful of latent directions dominate what the viewer sees and the rest are slack.
+If the KL16 decoder were built that way, the transform-coding intuition would at least be attacking a
+real structure. We measured whether it is, and found no sign of one.
 
 \paragraph{What we measured.} For the frozen KL16 autoencoder that MAR uses, we compute the decoder's
 local Jacobian spectrum at four ImageNet latents, obtained by re-encoding MAR-B's own samples so they
@@ -532,9 +571,9 @@ latent & anisotropy (top-$64$) & effective rank (of $64$) & $\sigma_{\max}$ & $\
 median & $\best{3.31}$ & $\best{61.06}$ & & \\
 \bottomrule
 \end{tabular}
-\caption{The KL16 decoder is close to isotropic over the directions that matter. Across the top $64$
-of $4096$ latent directions the perceptual gain varies by only $3.31\times$ and the effective rank is
-$61$ of $64$, so those directions carry near-equal response rather than a few dominating. The
+\caption{Among the directions we can measure, the KL16 decoder is close to isotropic. Across the top
+$64$ of $4096$ latent directions the perceptual gain varies by only $3.31\times$ and the effective
+rank is $61$ of $64$, so those directions carry near-equal response rather than a few dominating. The
 linearisation is trustworthy at the scale a verifier works in: measured finite-difference gain agrees
 with the Jacobian's prediction to a median relative error of $0.054$ (max $0.076$) at $\epsilon =
 10^{-2}$.}
@@ -543,20 +582,23 @@ with the Jacobian's prediction to a median relative error of $0.054$ (max $0.076
 
 \paragraph{Result.} Table~\ref{tab:kl16} reports the spectrum and Figure~\ref{fig:kl16} sets it
 against the DCT spectrum of the very same images. Within a latent, the decoder is close to isotropic
-over the directions that matter: gain varies by only $3.31\times$ across the top $64$, and the
+over the directions we can resolve: gain varies by only $3.31\times$ across the top $64$, and the
 effective rank is $61.06$ of $64$, meaning those directions carry nearly equal perceptual weight
 rather than a few carrying most of it. The comparison in Figure~\ref{fig:kl16}(a) is the sharpest way
 to see it. Sorted and normalised the same way, the image's DCT coefficients have fallen to $1.5\%$ of
 the leading coefficient by rank $64$, while the decoder's singular values are still at $30\%$, a
 decay roughly $20\times$ shallower. This is the empirical counterpart of the argument in
 \S\ref{sec:conservation}: a codec can discard high frequencies because a natural image's energy
-spectrum really does collapse, and the KL16 decoder's sensitivity spectrum simply does not. The
-compaction the analogy needs is missing in the literal sense as well as the Parseval sense.
+spectrum really does collapse, and over the directions we can measure the KL16 decoder's sensitivity
+spectrum does not. We state this as an absence of evidence rather than evidence of absence. What the
+measurement establishes is that there is \emph{no compact perceptual band among the top $64$ of
+$4096$ decoder-sensitive directions}; the remaining $4032$ are uncharacterised, and a strongly
+attenuated tail there would not show up in this experiment.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.75\textwidth]{figures/e05_kl16_spectrum.png}
-\caption{\textbf{Energy compaction has nothing to compact.} Two spectra of the same four ImageNet
+\caption{\textbf{No compact band among the directions we can measure.} Two spectra of the same four ImageNet
 samples, each sorted descending and truncated to the top $64$ components so that they are directly
 comparable. \textbf{(a)} The $2$D DCT coefficients of the decoded image (blue) fall to $1.5\%$ of the
 leading coefficient by rank $64$: this steep decay is the premise transform coding runs on, and it is
@@ -570,20 +612,17 @@ depending on which image is being generated.}
 \label{fig:kl16}
 \end{figure}
 
-\paragraph{What it does not say, and what it warns about.} It does not measure where draft and target
-disagree, the quantity Proposition~\ref{prop:conservation} governs; it measures only whether the
-decoder concentrates perceptual response, and finds it does not. The two arguments are complementary
-rather than the same one twice. The measurement also surfaces a problem the design question did not
-ask about: $\sigma_{\max}$ ranges from $15.99$ to $47.38$ across the four images, a factor of $3.0$,
-as large as the anisotropy within any one of them. A latent-space tolerance therefore buys threefold
-different pixel error depending on which image is generated, so any risk guarantee stated in latent
-space is marginal over images and not conditional on one.
-
-\paragraph{Caveats.} Four latents is a pilot, and the between-image spread is the quantity four
-samples estimate worst. Randomised SVD recovers the \emph{top} of the spectrum, so ``anisotropy
-$3.31$'' is a lower bound over the top $64$ of $4096$ directions and cannot rule out a badly
-attenuated tail among the remaining $4032$. The latents come from re-encoding MAR's own samples
-rather than photographs, so they sit where the method operates but are not ImageNet itself.
+\paragraph{What it does not say.} It does not measure where draft and target disagree, the quantity
+Proposition~\ref{prop:conservation} governs; it measures only whether the decoder concentrates
+perceptual response, and finds no sign that it does. The two arguments are complementary rather than
+the same one twice. It also surfaces a problem the design question did not ask about:
+$\sigma_{\max}$ ranges from $15.99$ to $47.38$ across the four images, so a latent-space tolerance
+buys threefold different pixel error depending on which image is generated, and any risk guarantee
+stated in latent space is marginal over images rather than conditional on one. Four latents is a
+pilot, the between-image spread is what four samples estimate worst, randomised SVD recovers only the
+top of the spectrum, and the latents are re-encoded MAR samples rather than photographs; the
+conclusion we draw is correspondingly the absence of a band among the top $64$ directions rather than
+its absence overall.
 
 \section{Moving the Frontier Instead of Sliding Along It}
 \label{sec:moving}
@@ -655,26 +694,6 @@ The absolute rates remain low and we claim no wall-clock speedup; the claim is a
 Distillation is the one intervention we tested that moves the curve rather than the position on it,
 and its advantage widens with the very parameter that defeats everything else.
 
-\section{The Published Criterion Is Applied Inverted}
-\label{sec:cspd}
-
-Continuous speculative decoding \citep{wang2025continuous} is, to our knowledge, the only published
-acceptance rule for continuous-token autoregressive models, and is therefore the natural baseline.
-Read against its own derivation, its acceptance ratio is not the one that derivation produces.
-
-Because the method shares the diffusion noise across the two denoising trajectories, the verified
-object is the whole trajectory and each Gaussian transition contributes a normaliser
-$(|\Sigma_{q,t}|/|\Sigma_{p,t}|)^{1/2}$, so the correct accumulated factor is
-$\prod_t (\sigma_{q,t}/\sigma_{p,t})$. The shipped code multiplies by its \emph{reciprocal},
-$\exp(\sum_t \log\sigma_p - \sum_t \log\sigma_q)$. The factor belongs, and an independent derivation
-\citep{zhang2025fastardiff} also has it, but applied upside down the ratio is wrong by the
-\emph{square} of the factor and every error exponent doubles. Bounding the accumulated variance
-mismatch over the sampler's schedule gives a worst-case exponent of $\best{161.5}$; at an assumed
-$5\%$ per-step gap the ratio is off by roughly $\best{3{,}200\times}$. Since $0.693$ already doubles
-acceptance, the criterion saturates $\min\{1,\cdot\}$ and accepts nearly everything, which would
-explain a reported speedup absent a fidelity audit. Appendix~\ref{app:cspd} gives the derivation, the
-bound, and the two details marking this as a sign slip rather than a modelling choice.
-
 \section{Related Work}
 \label{sec:related}
 
@@ -685,12 +704,21 @@ discrete vocabularies where the dimensional collapse does not arise. Our result 
 literature's central lever (improving the drafter) is the right one, and why the continuous analogue
 of its other lever (relaxing the test) is not.
 
-\paragraph{Continuous-token autoregressive generation.} \citet{li2024autoregressive} showed that
-autoregressive image models need no discrete tokenizer if the per-token density is a diffusion head,
-and D-JEPA \citep{li2025djepa} recast this as feature prediction with an EMA target encoder. That is
-suggestive here: it trains a predictor and a target encoder and discards both at inference, exactly
-the pair speculative sampling needs, and \S\ref{sec:moving} says a pair coupled during training is
-the intervention that matters.
+\paragraph{Continuous-token autoregressive generation and its accelerators.}
+\citet{li2024autoregressive} showed that autoregressive image models need no discrete tokenizer if
+the per-token density is a diffusion head, and D-JEPA \citep{li2025djepa} recast this as feature
+prediction with an EMA target encoder. That is suggestive here: it trains a predictor and a target
+encoder and discards both at inference, exactly the pair speculative sampling needs, and
+\S\ref{sec:moving} says a pair coupled during training is the intervention that matters. The
+diffusion head's cost is now attacked directly as well. FAR \citep{hang2025far} replaces it with a
+lightweight shortcut head and reports $2.3\times$ faster inference than MAR, and
+\citet{yao2025denoising} restructure denoising-token prediction to improve both quality and
+inference time. This matters for how our question should be read. It is no longer true that
+continuous-token autoregression is slow merely for want of an obvious remedy, so the interesting
+question is not how to make these models fast in general but what limits the one family of
+accelerations that provably does not perturb the output distribution. Our analysis is complementary
+to these methods rather than competing with them: they change the cost of a target step, whereas we
+ask what exact speculative verification of a continuous token can achieve as the token widens.
 
 \paragraph{Transform coding.} That an orthonormal change of basis makes a signal cheaper to represent
 is the foundation of image compression \citep{goyal2001transform}, from the DCT
@@ -699,10 +727,13 @@ Our conservation law is the same Parseval identity, applied to a different objec
 other way: coding profits because the \emph{signal} concentrates, whereas verification is governed by
 the draft--target \emph{disagreement}, which no basis concentrates.
 
-\paragraph{Acceptance rules in continuous spaces.} \citet{wang2025continuous} give the acceptance rule
-we correct in \S\ref{sec:cspd}; \citet{zhang2025fastardiff} report $4.38$--$4.88\times$ speedups on
-ImageNet with a related criterion and derive the trajectory normaliser in the form our analysis
-supports. The dimensional obstruction itself is an instance of a known result: \citet{fearnhead2012constructing}
+\paragraph{Acceptance rules in continuous spaces.} \citet{wang2025continuous} give continuous
+speculative decoding for autoregressive image generation, reporting exact distribution preservation
+and up to $2.33\times$ speedup; it is the closest prior work and the natural baseline, and
+Appendix~\ref{app:cspd} audits the trajectory-density normalisation in its released implementation.
+\citet{zhang2025fastardiff} report $4.38$--$4.88\times$ speedups on ImageNet with a related criterion
+and derive the trajectory normaliser in the form our analysis supports. The dimensional obstruction
+itself is an instance of a known result: \citet{fearnhead2012constructing}
 prove that ABC acceptance scales as $h^\dd$ in the dimension of the matched statistic, which is why
 any dimension reduction raises acceptance for reasons unrelated to its quality, and hence why the null
 control of \S\ref{sec:conservation} is mandatory rather than optional.
@@ -710,40 +741,48 @@ control of \S\ref{sec:conservation} is mandatory rather than optional.
 \section{Limitations}
 \label{sec:limits}
 
-The dimension sweep is run on one-dimensional signals, not on images. This buys the only thing that
-makes the central measurement possible, a token width that can be varied, at the cost of direct
-comparability to published image speedups. We report no FID and claim no wall-clock speedup; the
-quantities we measure, acceptance and distributional fidelity, are the ones the conservation law
-concerns. The two image-domain measurements are narrower than the framing may suggest. The latency
-figure is MAR-B at its published settings but on a contended GPU, so the $98.3\%$ share in the
-diffusion head is trustworthy while the absolute seconds per image are not, and \S\ref{sec:kl16}
-characterises the KL16 decoder's geometry rather than any acceptance rate, under the caveats stated
-there. What we have \emph{not} done is run speculative decoding between two real image models. The
-per-coordinate gap $\delta$ between MAR-B and MAR-H is unmeasured, and since acceptance depends on
-the pair only through $M = \delta\sqrt{\dd}$, that one number decides whether exact verification is
-practical for images at the per-token width of $16$. Our sweep says what happens as a function of
-$\dd$; it does not say where a particular published pair sits on it. That is the obvious next
-experiment and it needs a single instrumented generation run. Proposition~\ref{prop:conservation} is exact only for shared-covariance Gaussians; for our
-mixtures it is an approximation, and \S\ref{sec:conservation} measures how good a one rather than
-assuming it. The five rules are linear by construction, since a linear statistic keeps the pushforward
-Gaussian and the test exact; a nonlinear statistic escapes Proposition~\ref{prop:rowspace} and is not
-covered, though it also loses the exactness that makes projected verification attractive. Finally,
-\S\ref{sec:moving} is a mechanism demonstration, not a tuned system: absolute acceptance at
-$\dd{=}128$ is still too low to be useful, and we do not know where the trend saturates.
+\paragraph{Scope of the claim.} Corollary~\ref{cor:frontier} is a statement about \emph{orthonormal
+linear} statistics under a shared-covariance Gaussian model. Within that class, improving the
+model-pair divergence is the only way we found to move the frontier. We do not rule out that
+nonlinear, adaptive, or learned sufficient statistics evade the trade-off, and testing one is the
+most interesting experiment this paper does not contain; a nonlinear statistic escapes
+Proposition~\ref{prop:rowspace} and also loses the exactness that makes projected verification
+attractive in the first place. Proposition~\ref{prop:split} needs no such assumption, but it
+constrains total divergence rather than acceptance directly. For our Gaussian mixtures
+Proposition~\ref{prop:conservation} is an approximation, and \S\ref{sec:conservation} measures how
+good a one rather than assuming it.
+
+\paragraph{Scope of the evidence.} The dimension sweep runs on one-dimensional signals, not images,
+which buys the one thing that makes the measurement possible, a token width that can be varied, at
+the cost of direct comparability to published image speedups; we report no FID and claim no
+wall-clock speedup. All learned results use a single training seed per dimension, so small
+differences between rules should be read with that in mind, and the argument accordingly rests on
+effects that are orders of magnitude rather than percentages. One dataset is a further limit. The
+image-domain measurements are narrower than the framing may suggest: the $98.3\%$ latency share is
+MAR-B on a contended GPU, so the share is trustworthy and the absolute seconds are not, and
+\S\ref{sec:kl16} characterises decoder geometry rather than any acceptance rate. Most importantly,
+we have not run exact speculative decoding between two real image models. The trajectory-marginal
+gap between MAR-B and MAR-H remains unmeasured, and since acceptance depends on the pair only
+through $M$, that number decides whether exact verification is practical for images at $\dd = 16$;
+Appendix~\ref{app:cspd} reports what the final-step Gaussians give, which is a statement about that
+step rather than about the pair. Finally, \S\ref{sec:moving} is a mechanism demonstration, not a
+tuned system: absolute acceptance at $\dd{=}128$ remains too low to be useful, and we do not know
+where the trend saturates.
 
 \section{Conclusion}
 
-Speculative sampling in continuous token spaces fails structurally: acceptance decays as a Gaussian
-tail in $\sqrt{\dd}$, and we measure a $181\times$ collapse over a $32\times$ range of dimension with
-per-coordinate disagreement held flat. The repair image processing suggests, changing basis and
-verifying only the coefficients that matter, cannot work, because what a statistic sees and what
-escapes it are two halves of a budget Parseval's theorem holds constant. Transform coding earns its
-keep from energy compaction, and what governs verification is the draft--target disagreement, which no
-basis concentrates. Five rules whose costs span $48$ nats collapse onto one curve to within
-$\best{4.0\%}$, the low-frequency DCT band among them, and KL16 spreads its perceptual response almost
-evenly over every direction we could measure. What remains is to change the budget: distillation buys
-acceptance that projection can only rent, and more of it the higher $\dd$ goes, reaching
-$\best{5.72\times}$ free at $\dd{=}128$.
+Exact speculative verification of continuous tokens is limited by the accumulated draft--target
+divergence: acceptance decays as a Gaussian tail in $\sqrt{\dd}$, and we measure a $181\times$
+collapse over a $32\times$ range of dimension with per-coordinate disagreement held flat and a
+training-free reference tracing the same law to $\dd = 4096$. The repair image processing suggests,
+changing basis and verifying only the coefficients that matter, cannot remove the obstruction,
+because splitting a token into a verified statistic and its complement leaves the total divergence
+untouched and only decides how much of it the test sees. Five rules whose costs span $48$ nats
+collapse onto one frontier to within $\best{4.0\%}$, the low-frequency DCT band among them, and the
+KL16 decoder offers no compact perceptual band for such a rule to exploit. What remains is to change
+the divergence rather than where it is paid: distillation buys acceptance that projection can only
+rent, and more of it the higher $\dd$ goes, reaching $\best{5.72\times}$ free at $\dd{=}128$. Do not
+hide the discrepancy; reduce it.
 
 \bibliographystyle{tmlr}
 \bibliography{references}

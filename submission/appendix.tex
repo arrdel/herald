@@ -58,7 +58,31 @@ comparison in Table~\ref{tab:collapse} like for like. When $\kk = \dd$ and $A$ i
 argument gives $p_A/q_A = p/q$, so full-rank projected verification reproduces exact verification
 identically, which is the correctness test we apply to every projection implementation.
 
-\subsection{Proof of Proposition~\ref{prop:conservation} (conservation)}
+\subsection{Proof of Proposition~\ref{prop:split} (divergence is split, never reduced)}
+
+Let $R = \left[\begin{smallmatrix} A \\ A_\perp\end{smallmatrix}\right]$ be orthogonal and write
+$(s, u) = (Ax, A_\perp x)$. The map $x \mapsto (s,u)$ is a bijection with unit Jacobian, and KL is
+invariant under bijective reparameterisation, so $\KL(p \| q) = \KL(p_{s,u} \| q_{s,u})$. Factor each
+joint density as $p_{s,u} = p_A(s)\, p(u \mid s)$ and likewise for $q$. Then
+\begin{align*}
+\KL(p_{s,u} \| q_{s,u})
+&= \int p_A(s) p(u\mid s) \log \frac{p_A(s)\,p(u\mid s)}{q_A(s)\,q(u\mid s)} \, du \, ds \\
+&= \int p_A(s) \log\frac{p_A(s)}{q_A(s)} \, ds
+ + \int p_A(s) \int p(u \mid s) \log \frac{p(u\mid s)}{q(u \mid s)} \, du \, ds \\
+&= \KL(p_A \| q_A) + \E_{p_A}\!\left[\KL\bigl(p(u\mid s) \| q(u \mid s)\bigr)\right],
+\end{align*}
+using $\int p(u\mid s)\,du = 1$ in the first term. The left-hand side is $\KL(p\|q)$, which does not
+mention $A$. $\square$
+
+Two things are worth drawing out. Nothing here assumes Gaussianity, shared covariance, or any
+structure in the disagreement: the identity holds for arbitrary densities and arbitrary orthogonal
+splits, which is why we state it before specialising. And both terms are non-negative, so
+$\KL(p_A \| q_A) \le \KL(p \| q)$ for every $A$: a projected test can only ever see a fraction of the
+divergence, and the remainder is not destroyed but relocated into the conditional term, which is
+exactly the fidelity the relaxed rule leaks. What a designer controls is the partition, not the
+total.
+
+\subsection{Proof of Proposition~\ref{prop:conservation} (Gaussian conservation)}
 
 Let $p = \mathcal{N}(\mu_p, \sigma^2 I_\dd)$, $q = \mathcal{N}(\mu_q, \sigma^2 I_\dd)$,
 $\delta = \mu_p - \mu_q$. Let $A \in \R^{\kk\times\dd}$ have orthonormal rows, so $AA^\top = I_\kk$,
@@ -92,9 +116,9 @@ a strictly decreasing function of $\|A\delta\|^2$ alone. $\square$
 \paragraph{Reading the result.} Both the acceptance rate and the divergence that leaks past the test
 are determined by the single scalar $\|A\delta\|^2 \in [0, \|\delta\|^2]$: as it increases, acceptance
 falls and the leak shrinks, and their sum is pinned. A subspace rule chooses a value of that scalar
-and nothing else. This is the precise sense in which acceptance is conserved, and it is why the
-adversarial anti-control of \S\ref{sec:conservation} is not a bad rule but a rule that has chosen a
-different point on the same curve.
+and nothing else, which is the precise sense in which the two are traded rather than independently
+set, and it is why the adversarial anti-control of \S\ref{sec:conservation} is not a bad rule but a
+rule that has chosen a different point on the same curve.
 
 \paragraph{Where the assumptions bind.} Shared covariance is what makes the pushforward covariance
 $A\Sigma A^\top$ equal to $\sigma^2 I_\kk$ for \emph{every} orthonormal $A$; with heteroscedastic
@@ -104,15 +128,57 @@ between mixtures does not decompose. Both are reasons to measure rather than ass
 \S\ref{sec:conservation} does; the observed departures from a single curve are $4.0\%$ of the range at
 $\dd{=}64$.
 
-\paragraph{The random-subspace corollary.} If $A$ is drawn uniformly from the Stiefel manifold, then
-$\E\|A\delta\|^2 = (\kk/\dd)\|\delta\|^2$ by symmetry. Substituting into the acceptance formula gives
-$\bar A = 2 - 2\Phi\bigl(\sqrt{\kk/\dd}\,\|\delta\|/2\sigma\bigr)$, and since
-$\|\delta\| = \delta_{\text{coord}}\sqrt{\dd}$ when the per-coordinate gap is fixed, the $\dd$ cancels
-and acceptance depends on $\kk$ alone. This is the prediction the null control confirms, with a
-coefficient of variation of $1.3\%$--$12.3\%$ across a $32\times$ range of $\dd$.
+\subsection{Proof of Proposition~\ref{prop:random} (random subspaces at finite $\dd$)}
+\label{app:random}
 
-\section{The Continuous Speculative Decoding Criterion}
+An earlier version of this argument took $\E\|A\delta\|^2 = (\kk/\dd)\|\delta\|^2$ and substituted it
+into the acceptance formula. That step is not valid. Acceptance is
+$f(z) = 2 - 2\Phi(\sqrt{z}/2\sigma)$, which is strictly convex over the relevant range, so
+$\E[f(Z)] \neq f(\E Z)$; evaluated over our sweep the substitution understates acceptance by $2.8\%$
+to $8.8\%$ (median $5.4\%$). The correct treatment uses the exact law of the captured fraction, and
+gives a stronger conclusion than the invalid one did.
+
+Let $A$ be uniform on the Stiefel manifold $V_\kk(\R^\dd)$. By rotational invariance we may instead
+fix $A$ and take $\delta$ uniform on the sphere of radius $\|\delta\|$, so
+$Z = \|A\delta\|^2/\|\delta\|^2$ is the squared norm of the first $\kk$ coordinates of a uniform unit
+vector. Writing that vector as $g/\|g\|$ for $g \sim \mathcal{N}(0, I_\dd)$,
+\[
+Z = \frac{\sum_{i\le \kk} g_i^2}{\sum_{i \le \dd} g_i^2}
+  = \frac{\chi^2_\kk}{\chi^2_\kk + \chi^2_{\dd-\kk}}
+  \sim \operatorname{Beta}\!\left(\frac{\kk}{2}, \frac{\dd-\kk}{2}\right),
+\]
+with the two chi-squared variables independent. Hence, with $M = \|\delta\|/\sigma$,
+\[
+\E_A\bigl[\bar A_A\bigr] = \E_Z\!\left[2 - 2\Phi\!\left(\frac{M\sqrt{Z}}{2}\right)\right].
+\]
+Now hold the per-coordinate gap fixed, so $M = c\sqrt{\dd}$. The verified separation is
+$M^2 Z = c^2 \dd Z$, and
+\[
+\dd Z = \frac{\chi^2_\kk}{(\chi^2_\kk + \chi^2_{\dd-\kk})/\dd} \;\Longrightarrow\; \chi^2_\kk
+\]
+as $\dd \to \infty$ with $\kk$ fixed, because the denominator converges to $1$ almost surely by the
+law of large numbers while the numerator does not depend on $\dd$. By the continuous mapping theorem
+and boundedness of $f$, expected acceptance converges to $\E[2 - 2\Phi(c\sqrt{\chi^2_\kk}/2)]$, which
+contains no $\dd$. $\square$
+
+So "acceptance is a function of $\kk$ alone" is a limit rather than a coincidence, with an $O(1/\dd)$
+finite-size correction. Evaluating the exact Beta expression at $c = 0.578$ over
+$\dd \in \{16, 64, 128, 512, 4096\}$ gives a coefficient of variation across dimensions of $0.15\%$ at
+$\kk{=}1$, $0.47\%$ at $\kk{=}4$ and $1.7\%$ at $\kk{=}32$. The trained models show $1.3\%$--$12.3\%$
+over a $32\times$ range of $\dd$, larger than the analytic prediction, which is what heteroscedastic
+mixtures and finite evaluation samples should add.
+
+\section{Audit of the Trajectory-Density Normalisation in Continuous Speculative Decoding}
 \label{app:cspd}
+
+This appendix is a code-level audit of one factor in the acceptance ratio of
+\citet{wang2025continuous}, and we state its status carefully. We derive the trajectory ratio the
+method's own construction implies, compare it against the released implementation, and bound the
+size of the discrepancy. What we have \emph{not} done is reproduce that work's reported acceptance
+rates or speedups end to end, or run a fidelity audit of its generated images, so we report an
+inconsistency between a derivation and an implementation rather than a verdict on the method's
+published results. We measure the relevant quantity on a real MAR-B/MAR-H pair below, and note that
+the orientation in question is independently checkable from the public source.
 
 \subsection{The trajectory ratio}
 
@@ -201,6 +267,32 @@ We note that our own earlier analysis of this criterion claimed the accumulated 
 the ratio at all. That claim was wrong, and reading \citet{zhang2025fastardiff} against the source is
 what corrected it. The resulting claim is weaker, since the term belongs and is merely inverted, and far more
 defensible, with an independent derivation supporting the form.
+
+\subsection{What the criterion is actually applied to, on a real MAR pair}
+\label{app:e06}
+
+We ran the released runner once on a genuine MAR-B draft against a MAR-H target
+($208$M and $942$M parameters, ImageNet $256$, $64$ autoregressive steps, guidance $4.0$) and
+recorded every input its acceptance test receives: $1008$ token decisions at $\dd = 16$. The
+distributions it compares turn out to be nearly degenerate. The final-step posterior standard
+deviation is $0.0064$ for both models, the two agree on it to a median ratio of $1.000$, and the
+proposed token is the draft's own posterior mean to within numerical precision, because the last
+denoising step adds no noise. The gap between the two means is $0.107$ in median absolute value, so
+in units of that standard deviation the models sit a median $16.5\sigma$ apart per coordinate,
+giving a Mahalanobis separation of $M \approx 138$ and an exact acceptance rate that rounds to zero.
+
+This is a fact about the final denoising transition, not about the two models: the predictive
+distribution a verifier should be comparing is the trajectory marginal, and the last transition of a
+diffusion sampler is a near-deterministic map with a vanishing scale. We report it here because it
+explains the role of the sampling temperature. At the shipped value of $42$ the effective separation
+falls by the same factor, to $M \approx 3.3$, which is the regime in which the test discriminates at
+all. Any acceptance rate this criterion reports is therefore inseparable from that choice, which is
+the strongest reason we treat the audit as an appendix rather than a headline: what is
+demonstrably inconsistent is the orientation of one factor, whereas assessing the method's reported
+speedups would require a fidelity audit of its outputs that we have not run. Measuring the
+trajectory-marginal separation of MAR-B and MAR-H, the quantity Figure~\ref{fig:feasibility}(b)
+would place on the map, requires drawing from each head repeatedly at shared contexts and remains
+future work.
 
 \section{Experimental Setup}
 \label{app:setup}
@@ -563,15 +655,18 @@ predict the achievable speedup before implementing anything.
 \paragraph{The budget.} Speculative sampling with a draft costing a fraction $c$ of the target's
 forward pass yields an expected speedup of roughly $1/(c + 1 - \bar{A})$ for single-token
 verification, so a rate of $\bar{A} = 0.5$ is worth having and $\bar{A} = 0.02$ is worth nothing.
-Inverting $\bar{A} = 2 - 2\Phi(M/2)$, useful acceptance requires
+Inverting $\bar{A} = 2 - 2\Phi(M/2)$ at $\bar A = 0.5$ requires $\Phi(M/2) = 0.75$, so useful
+acceptance requires
 \[
-M = \frac{\|\delta\|}{\sigma} \;=\; \frac{\delta_{\text{coord}}\sqrt{\dd}}{\sigma} \;\lesssim\; 1.7 .
+M = \frac{\|\delta\|}{\sigma} \;=\; \frac{\delta_{\text{coord}}\sqrt{\dd}}{\sigma}
+\;\lesssim\; 1.35 .
 \]
-At $\dd = 16$ this permits a per-coordinate relative disagreement of about $0.42\sigma$; at
-$\dd = 256$ it permits $0.11\sigma$; at $\dd = 4096$, $0.027\sigma$. The requirement tightens as
-$1/\sqrt{\dd}$, and it is a requirement on how closely two \emph{separately trained} networks agree
-pointwise in latent space, a far stronger condition than matching in distribution, and one that
-nothing in ordinary training encourages.
+At $\dd = 16$ this permits a per-coordinate relative disagreement of about $0.34\sigma$; at
+$\dd = 256$ it permits $0.084\sigma$; at $\dd = 4096$, $0.021\sigma$. Figure~\ref{fig:feasibility}(b)
+plots the same constraint at four acceptance levels. The requirement tightens as $1/\sqrt{\dd}$, and
+it is a requirement on how closely two \emph{separately trained} networks agree pointwise in latent
+space, a far stronger condition than matching in distribution, and one that nothing in ordinary
+training encourages.
 
 \paragraph{Reading our measurements against it.} Our models sit at
 $\delta_{\text{coord}}/\sigma \approx 0.2$, which is a good draft by any ordinary standard: the two

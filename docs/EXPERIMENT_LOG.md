@@ -893,3 +893,99 @@ Eq. 4 as Parseval's theorem applied to the draft–target gap rather than to the
 promoted from one rule among five to the transform-coding rule under test. Venue changed from ICLR
 2027 to TMLR: `iclr2027_conference.sty` removed, official `tmlr.sty`/`tmlr.bst` vendored, main
 content held to exactly 12 pages so the two-week review deadline still applies. Appendix 12 pages.
+
+---
+
+## 2026-09-09 — E0.6 / E0.7 / E0.8 — Reviewer overhaul: the theory generalises without Gaussians, the random-projection derivation was invalid, and CSpD's test fires on a near-degenerate distribution
+
+**Context:** a detailed external review judged the paper "borderline / weak reject" for a top venue,
+with the core objection that several claims were broader than the theorem and experiments support.
+This entry records the three measurements made in response and the claim changes they forced.
+
+### Verified the review's arithmetic before acting on it
+
+Three of its criticisms are correct and are now fixed in the paper.
+
+- **`M ≈ 1.35`, not `1.7`.** `A = 2 − 2Φ(M/2) = 0.5` needs `Φ(M/2) = 0.75`, so `M = 1.349`.
+  `M = 1.7` corresponds to `A = 0.395`. The appendix design rule was wrong by that margin.
+- **The `0.519` exponent is not distinguishable from `0.5`.** Log-log fit over the six measured `M`
+  gives slope `0.5194`, se `0.0525`, 95% CI `[0.374, 0.665]`, `p = 0.73` against `0.5`. The paper no
+  longer reports it as a departure.
+- **`181×` was right, its presentation was not.** Unrounded, `0.642470 / 0.003548 = 181.06`; the
+  four-decimal table rounds to `183.6`. The caption now says so.
+
+### E0.8 — the analytic reference, and the random-projection law done properly (no GPU)
+
+`python scripts/run_e08.py`
+
+The old derivation substituted `E||Aδ||² = (k/d)||δ||²` into the acceptance formula. That is invalid
+because `f(z) = 2 − 2Φ(√z/2σ)` is nonlinear; measured over the sweep the substitution errs by
+**2.8–8.8% (median 5.4%)**. Doing it correctly *strengthens* the result rather than repairing it.
+With `Z = ||Aδ||²/||δ||² ~ Beta(k/2, (d−k)/2)` and the per-coordinate gap held fixed so `M = c√d`,
+the verified separation `M²Z = c²·dZ ⇒ c²·χ²_k`, **a limit containing no `d` at all**. So
+"acceptance is a function of `k` alone" is a theorem with an `O(1/d)` correction, not a coincidence.
+Evaluating the exact Beta expression over `d ∈ {16,…,4096}` gives a CV across dimensions of
+**0.15% at k=1, 0.47% at k=4, 1.7% at k=32**, against the `1.3–12.3%` measured on trained models —
+the excess being what heteroscedastic mixtures and finite samples should add.
+
+Also: a training-free dimension sweep to `d = 4096` at the measured `δ/σ = 0.578`, with a direct
+Monte Carlo of the accept/reject rule confirming the closed form to **6.5e-4**. This is the clean
+reference the trained sweep is a noisy sample of, and it answers the "dimension is not the only
+variable" objection without needing the tokenizer to be held fixed.
+
+New figure `e08_feasibility.png`: acceptance contours over `(d, δ/σ)`. Holding `A = 0.5` needs
+per-coordinate agreement within **0.34σ at d=16** but **0.021σ at d=4096**.
+
+### E0.6 — CSpD's acceptance test on a real MAR-B/MAR-H pair (GPU 7, ~28 s)
+
+`python scripts/run_e03.py capture --draft base --target huge --num-images 4 --num-iter 64`
+then `python scripts/run_e06.py`
+
+1008 real token decisions at `d = 16`. **The distributions the shipped test compares are nearly
+degenerate.** Final-step posterior `σ = 0.0064` for both models, agreeing to a median ratio of
+`1.000`; the proposed token equals the draft's posterior mean to numerical precision, because the
+last denoising step adds no noise. Median gap `0.107`, i.e. **16.5σ per coordinate**, giving
+`M ≈ 138` and exact acceptance that rounds to **0.0000**.
+
+**Reading — and what this is not.** This is a fact about the final denoising transition, not about
+the two models. It does *not* measure the draft/target separation the paper's theory concerns, which
+is the trajectory marginal. What it does explain is the sampling temperature: at the shipped value of
+42 the effective separation falls to `M ≈ 3.3`, which is the only regime in which that test
+discriminates at all. It went into the CSpD appendix, not the main text.
+
+### E0.7 — the measurement the review actually asked for: written, not yet run
+
+`scripts/run_e07.py` samples both heads `n_draws` times per position at *shared* contexts, which is
+the only honest route to the trajectory marginal since a diffusion head has no closed-form `(μ, σ)`.
+Lint-clean and ready. **Blocked on GPU:** all eight A6000s returned to 100%/48 GB from another user's
+job minutes after the E0.6 capture finished. This remains the single highest-value open experiment.
+
+### Claim changes in the paper
+
+- **Title** → *The Dimensionality Barrier in Continuous Speculative Sampling*. "Acceptance is
+  conserved" was indefensible: projected acceptance demonstrably moves from 0.0035 to 0.64.
+- **New Proposition 2 (no assumptions):** `KL(p‖q) = KL(p_A‖q_A) + E_{p_A}[KL(p(u|s)‖q(u|s))]` by the
+  KL chain rule under a bijection. Gaussian conservation is now a corollary of it. This answers the
+  "why should a Gaussian identity tell me anything general" objection: projection *never* destroys
+  divergence, it converts marginal into conditional, for arbitrary densities.
+- **"No subspace can beat any other" → "a rule selects a point on the frontier, it cannot move the
+  frontier."** The old phrasing was contradicted by our own data (0.018 vs 0.550 at `d=128, k=16`).
+- **"the only lever is the divergence" → "within the class of orthonormal linear rules studied
+  here."** Nonlinear/adaptive/learned statistics are explicitly left open.
+- **"dimension is the only variable" → "a dimension-indexed family of matched systems,"** with the
+  tokenizer retraining stated outright and the analytic reference carrying the isolating argument.
+- **KL16: "has no band to keep" → "no evidence of a compact band among the top 64 of 4096."**
+- **Excess NLL is labelled a zero-anchored cross-entropy discrepancy, not a divergence.**
+- **Contributions 6 → 3**; CSpD audit demoted to an appendix and reframed as an audit of one factor
+  rather than a verdict, explicitly noting we did not reproduce its speedups.
+- **Related work** gained FAR (arXiv 2504.18391, verified) and De-MAR (ICCV 2025 pp. 18024–18033,
+  verified), and the motivation no longer implies continuous AR is slow for want of a remedy.
+
+**Page budget:** main body is 12 pages plus ~60% of page 13, over the 12-page bar for TMLR's
+two-week review window. Held there deliberately: the overflow is the new proposition, the
+feasibility figure and the scoping the review demanded, and figure rescaling was absorbed by float
+reflow without recovering space. 113 tests pass; build is clean with no unresolved references.
+
+**Still open (review P1):** seeds, a second dataset, the oracle discrepancy-aligned subspace,
+bootstrap CIs on frontier deviations, expanded KL16 sampling, and distillation continued to a useful
+acceptance regime.
