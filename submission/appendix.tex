@@ -13,10 +13,12 @@ rejection draw from $r(x) = (p(x) - q(x))_+ / Z$. The emitted density is
 \]
 
 First, $Z = 1 - \bar{A}$. Writing $\min\{a,b\} = b - (b-a)_+$ with $a = p$, $b = q$,
-\[
-\bar{A} = \int q(x)\min\Bigl\{1, \tfrac{p(x)}{q(x)}\Bigr\} dx = \int \min\{q(x), p(x)\} \, dx
-        = \int \bigl(q(x) - (q(x) - p(x))_+\bigr) dx = 1 - \int (q - p)_+ .
-\]
+\begin{align*}
+\bar{A} &= \int q(x)\min\{1,\, p(x)/q(x)\} \, dx
+         = \int \min\{q(x), p(x)\} \, dx \\
+        &= \int \bigl(q(x) - (q(x) - p(x))_+\bigr) dx
+         = 1 - \int (q - p)_+ .
+\end{align*}
 Since $\int p = \int q = 1$ we have $\int (p-q)_+ = \int (q-p)_+$, so $Z = 1 - \bar A$ as claimed.
 Substituting,
 \[

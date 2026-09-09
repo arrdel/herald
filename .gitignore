@@ -34,3 +34,13 @@ dist/
 # Env
 .env
 .venv/
+
+# LaTeX build artefacts (submission/main.pdf is committed deliberately)
+submission/*.aux
+submission/*.bbl
+submission/*.blg
+submission/*.log
+submission/*.out
+submission/*.synctex.gz
+submission/*.fls
+submission/*.fdb_latexmk

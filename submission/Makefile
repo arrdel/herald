@@ -11,7 +11,7 @@ MAIN = main
 
 all: $(MAIN).pdf
 
-$(MAIN).pdf: $(MAIN).tex appendix.tex fig_overview.tex fig_conservation.tex references.bib iclr2027_conference.sty
+$(MAIN).pdf: $(MAIN).tex appendix.tex fig_overview.tex fig_conservation.tex references.bib tmlr.sty tmlr.bst
 	pdflatex -interaction=nonstopmode -halt-on-error $(MAIN)
 	-bibtex $(MAIN)
 	pdflatex -interaction=nonstopmode -halt-on-error $(MAIN)

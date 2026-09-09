@@ -850,3 +850,46 @@ wrong about the mechanism.
 row per dimension, `tab:e14` to six rows, a new right-hand panel showing gain against `d`, and the
 `√d`-difficulty caveat in §5 replaced by the trend. Appendix tables are now generated from
 `results.json` rather than transcribed. Main text stays at 9 pages; appendix 11.
+---
+
+## 2026-09-09 — E0.5b — The KL16 decoder's sensitivity spectrum decays 20× more slowly than the DCT spectrum of the images it produces, which is the image-domain statement of the conservation result
+
+**Ran:** `python scripts/plot_e05_spectrum.py --results experiments/E0.5-kl16-jacobian/results.json
+--samples experiments/E0.1-mar-base/samples.png --out submission/figures/e05_kl16_spectrum.png`.
+No new GPU work: this re-reads E0.5's stored Jacobian spectra and adds one derived quantity. All
+eight A6000s were held at 100% by another user's job throughout, so nothing new could have been run
+anyway.
+
+**Setup:** the four E0.5 latents (top 64 singular values of the KL16 decoder's local Jacobian, of
+4096 latent directions) against the 2D DCT of the luminance of the same four MAR-B samples. Both
+spectra are sorted descending, truncated to 64 components, and normalised by their leading
+component, which is the only way the two are comparable — they are spectra of different objects and
+only the *shape of the decay* is being compared.
+
+**Result (derived, not newly measured).** At rank 64, the median normalised magnitude is **0.0146**
+for the image DCT coefficients and **0.3038** for the decoder's singular values: the sensitivity
+spectrum is roughly **20× shallower**. Recomputed from E0.5's stored values, `σ_max` across the four
+latents spans 15.99 to 47.38.
+
+**Reading.** This is the empirical half of the argument the paper makes analytically. Transform
+coding is profitable because a natural image's energy really is concentrated in a few coefficients,
+and the DCT curve shows that concentration on these very images. Projected verification would need
+the *decoder* to concentrate its perceptual response in the same way, and it does not: at the rank
+where the image has given up 98.5% of its leading magnitude, the decoder has given up 70%. So the
+transform-coding intuition fails twice over — Proposition 2 says a good basis could not help even if
+one existed, and this says the structure it would exploit is not there to begin with. The two are
+complementary, and it is worth being explicit that this measures decoder geometry, **not** where the
+draft and target disagree, which remains unmeasured on real image models.
+
+**Caveats.** Inherits all of E0.5's: four latents, top 64 of 4096 so the anisotropy is a lower
+bound, and latents re-encoded from MAR's own samples rather than photographs. The DCT side adds one
+more — the comparison is between a full-resolution pixel-domain transform and a latent-space
+Jacobian, so it is a statement about decay shape and nothing finer.
+
+**Changes:** paper reframed around the image-processing story for a TMLR submission (see below).
+`§5 The Real Image Tokenizer Has No Band to Keep` is new and carries this figure plus E0.5's table;
+the conservation section gained a `Why transform coding does not transfer` passage naming
+Eq. 4 as Parseval's theorem applied to the draft–target gap rather than to the signal; `dct-low` is
+promoted from one rule among five to the transform-coding rule under test. Venue changed from ICLR
+2027 to TMLR: `iclr2027_conference.sty` removed, official `tmlr.sty`/`tmlr.bst` vendored, main
+content held to exactly 12 pages so the two-week review deadline still applies. Appendix 12 pages.
