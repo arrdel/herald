@@ -1,140 +1,164 @@
 % System overview. Kept in its own file because it is long and iterated on independently of the
-% prose. Coordinates are absolute and chosen so the picture is ~14cm wide, i.e. it reaches \textwidth
-% at roughly unit scale; resizing much below 1 makes the annotation text illegible in print.
+% prose.
+%
+% The picture is drawn at its final print size: 1 TikZ unit = 1cm and the canvas is pinned to
+% 16.4cm, just under \textwidth, by the \path below. \resizebox is therefore a no-op safeguard
+% rather than a scale factor. This matters -- an earlier version let unwrapped text nodes push the
+% natural width past 30cm, and \resizebox then shrank every label to half size. Every node that
+% holds a sentence carries an explicit text width so it wraps instead of growing the bounding box.
 \begin{figure}[t]
 \centering
-\resizebox{\textwidth}{!}{%
+\resizebox{0.94\textwidth}{!}{%
 \begin{tikzpicture}[
   font=\sffamily\small,
   box/.style   = {draw=black!55, rounded corners=2pt, align=center, inner sep=3pt, fill=white},
-  stage/.style = {box, fill=black!4, minimum height=1.15cm},
-  draft/.style = {box, fill=blue!10,   draw=blue!60,        minimum height=0.95cm},
-  targ/.style  = {box, fill=red!10,    draw=red!60,         minimum height=0.95cm},
-  test/.style  = {box, fill=amber!25,  draw=amber!80!black},
-  good/.style  = {box, fill=green!13,  draw=green!45!black},
-  warn/.style  = {box, fill=orange!13, draw=orange!70!black},
-  bad/.style   = {box, fill=red!11,    draw=red!60},
-  proj/.style  = {box, fill=violet!12, draw=violet!60},
-  fl/.style    = {-{Latex[length=2.0mm]}, draw=black!65, line width=0.55pt},
-  hd/.style    = {font=\sffamily\bfseries\footnotesize, anchor=west},
-  sub/.style   = {font=\sffamily\footnotesize\itshape, text=black!55, anchor=west},
-  note/.style  = {font=\sffamily\scriptsize, text=black!55, align=center},
+  stage/.style = {box, fill=black!5, minimum height=1.50cm, minimum width=2.35cm,
+                  font=\sffamily\scriptsize},
+  draft/.style = {box, fill=blue!10,   draw=blue!60,  minimum height=1.00cm, font=\sffamily\scriptsize},
+  targ/.style  = {box, fill=red!10,    draw=red!60,   minimum height=1.00cm, font=\sffamily\scriptsize},
+  test/.style  = {box, fill=amber!25,  draw=amber!80!black, font=\sffamily\scriptsize},
+  good/.style  = {box, fill=green!13,  draw=green!45!black, font=\sffamily\scriptsize},
+  warn/.style  = {box, fill=orange!13, draw=orange!70!black, font=\sffamily\scriptsize},
+  bad/.style   = {box, fill=red!11,    draw=red!60,   font=\sffamily\scriptsize},
+  proj/.style  = {box, fill=violet!12, draw=violet!60, font=\sffamily\scriptsize},
+  fl/.style    = {-{Latex[length=2.2mm]}, draw=black!65, line width=0.6pt},
+  hd/.style    = {font=\sffamily\bfseries\small, anchor=west},
+  sub/.style   = {font=\sffamily\scriptsize\itshape, text=black!55, anchor=west},
+  note/.style  = {font=\sffamily\scriptsize, text=black!58, align=center},
   lbl/.style   = {font=\sffamily\scriptsize, inner sep=1.5pt},
+  tag/.style   = {font=\sffamily\bfseries\scriptsize, inner sep=1.5pt},
 ]
+% Pin the canvas so the picture is exactly \textwidth-ish at unit scale.
+\path (0,-0.10) rectangle (16.40,9.60);
 
 %======================= (a) the generative pipeline =======================
-\node[hd]  at (0,2.15) {(a) Continuous-token autoregressive pipeline};
-\node[sub] at (6.05,2.15) {the image setting, reproduced in 1-D so that $\dd$ can be varied};
+\node[hd]  at (0,9.28) {(a) Where the latency is: continuous-token autoregressive image generation};
 
-\node[stage, minimum width=2.10cm] (sig) at (1.05,1.0)  {};
-\node[font=\sffamily\scriptsize, anchor=north, align=center] at ($(sig.north)+(0,-0.05)$)
-     {signal window\\[-2pt]$7 \times 96$};
-\begin{scope}[shift={(sig.center)}]
-  \draw[blue!60, line width=0.45pt] plot[smooth,tension=0.75]
-    coordinates {(-0.88,-0.22) (-0.63,-0.05) (-0.38,-0.30) (-0.13,-0.10)
-                 (0.12,-0.34) (0.37,-0.12) (0.62,-0.28) (0.88,-0.08)};
-  \draw[red!50, line width=0.45pt] plot[smooth,tension=0.75]
-    coordinates {(-0.88,-0.36) (-0.63,-0.26) (-0.38,-0.12) (-0.13,-0.33)
-                 (0.12,-0.16) (0.37,-0.35) (0.62,-0.14) (0.88,-0.30)};
+\node[stage] (img) at (1.30,8.00) {};
+% raised clear of the two-line caption below it
+\begin{scope}[shift={(1.30,8.22)}]
+  \fill[blue!18] (-0.78,-0.30) rectangle (0.78,0.30);
+  \fill[amber!70] (0.45,0.14) circle (0.095);
+  \fill[green!35!black!55] (-0.78,-0.30) -- (-0.26,0.12) -- (0.12,-0.30) -- cycle;
+  \fill[green!30!black!40] (-0.10,-0.30) -- (0.32,0.02) -- (0.78,-0.30) -- cycle;
+  \draw[black!45, line width=0.4pt] (-0.78,-0.30) rectangle (0.78,0.30);
 \end{scope}
+\node[font=\sffamily\scriptsize, anchor=south, align=center] at (1.30,7.33)
+     {ImageNet\\[-2pt]$256{\times}256$};
 
-\node[stage, minimum width=2.00cm] (enc) at (3.45,1.0) {patch VAE\\encoder};
+\node[stage] (enc) at (4.05,8.00) {KL16\\patch VAE\\[-1pt]\itshape frozen};
 
-\node[stage, minimum width=2.20cm] (tok) at (5.90,1.0) {};
-\node[font=\sffamily\scriptsize, anchor=north, align=center] at ($(tok.north)+(0,-0.05)$)
-     {$T$ tokens\\[-2pt]$x_t \in \R^{\dd}$};
-\foreach \i/\c in {0/black!14, 1/black!28, 2/black!50, 3/black!28, 4/black!14}
-  {\fill[\c, draw=black!50, line width=0.3pt]
-     ($(tok.center)+(\i*0.27-0.54,-0.42)$) rectangle ++(0.20,0.21);}
+\node[stage] (tok) at (6.80,8.00) {};
+\node[font=\sffamily\scriptsize, anchor=north] at (6.80,8.68) {$16{\times}16$ tokens};
+% 4x4 stand-in for the 16x16 grid, centred on the scope origin in both axes:
+% with pitch 0.155 and cell 0.12 the block is 0.585 wide, so x0 runs from -0.2925.
+\begin{scope}[shift={(6.80,8.03)}]
+  \foreach \i in {0,...,3}{\foreach \j in {0,...,3}{
+    \pgfmathsetmacro{\sh}{12+58*abs(sin(\i*57+\j*97))}
+    \fill[black!\sh, draw=black!55, line width=0.25pt]
+      (\i*0.155-0.2925,\j*0.155-0.2925) rectangle ++(0.12,0.12);}}
+\end{scope}
+\node[font=\sffamily\scriptsize, anchor=south] at (6.80,7.33) {$x_t \in \R^{16}$};
 
-\node[stage, minimum width=2.00cm] (tf)  at (8.35,1.0) {masked AR\\transformer};
-\node[stage, minimum width=2.30cm] (mix) at (10.85,1.0) {Gaussian mixture\\[-1pt]\scriptsize over masked $x_t$};
-\node[stage, minimum width=1.60cm] (dec) at (13.15,1.0) {decoder};
+\node[stage] (tf) at (9.55,8.00) {masked AR\\transformer\\[-1pt]\itshape all positions,\\[-2pt]\itshape one pass};
 
-\foreach \a/\b in {sig/enc, enc/tok, tok/tf, tf/mix, mix/dec} {\draw[fl] (\a) -- (\b);}
+\node[stage] (hd) at (12.30,8.00) {};
+\node[font=\sffamily\scriptsize, anchor=north] at (12.30,8.68) {diffusion head};
+\begin{scope}[shift={(12.30,8.06)}]
+  \foreach \i in {0,1,2,3}{
+    \pgfmathsetmacro{\op}{18+26*\i}
+    \fill[red!\op, draw=red!60, line width=0.3pt] (\i*0.30-0.45,0) circle (0.092);}
+\end{scope}
+\node[font=\sffamily\scriptsize, text=red!60!black, anchor=south] at (12.30,7.33)
+     {$\sim$100 steps};
 
-\node[note, anchor=north] at (5.90,0.28)
-  {$\dd$ is a constructor argument, not a fixed tokenizer width:\\[-2pt]
-   models retrained at $\dd = 4,8,16,32,64,128$};
+\node[stage] (dec) at (15.05,8.00) {KL16\\decoder};
+
+\foreach \a/\b in {img/enc, enc/tok, tok/tf, tf/hd, hd/dec} {\draw[fl] (\a) -- (\b);}
+
+\node[bad, anchor=north, text width=5.0cm, minimum height=0.62cm] (bottleneck) at (12.30,7.08)
+  {\textbf{98.3\%} of wall time, because these steps are \emph{sequential} at a batch of one or two tokens};
+\draw[fl, draw=red!55] (hd.south) -- (bottleneck.north);
+
+\node[proj, anchor=north west, text width=8.9cm, fill=violet!7, draw=violet!45,
+      minimum height=0.62cm] (testbed) at (0.05,7.08)
+  {\textbf{Our testbed is this same graph in 1-D.} KL16 is welded to $\dd{=}16$, so an image pipeline
+   yields one point on a curve; here $\dd$ is a constructor argument and we sweep
+   $\dd = 4,\dots,128$ (Table~\ref{tab:correspondence}).};
 
 %======================= (b) one exact speculative step =======================
-\node[hd]  at (0,-0.95) {(b) One speculative step at token position $t$};
-\node[sub] at (6.05,-0.95) {exact verification, in the full $\R^{\dd}$};
+\node[hd]  at (0,5.82) {(b) Speculative sampling, applied exactly};
+\node[sub] at (7.00,5.82) {verify the whole token, in $\R^{\dd}$};
 
-\node[draft, minimum width=2.60cm] (q) at (1.30,-1.80) {\textbf{draft} $q$\\[-2pt]\scriptsize width 128, depth 4};
-\node[targ, minimum width=2.60cm] (p) at (1.30,-3.10) {\textbf{target} $p$\\[-2pt]\scriptsize width 256, depth 6};
+\node[draft, minimum width=2.70cm] (q) at (1.45,5.05) {\textbf{draft} $q$ \emph{cheap}};
+\node[targ, minimum width=2.70cm] (p) at (1.45,3.90) {\textbf{target} $p$ \emph{costly}};
 
-\node[test, minimum width=2.30cm, minimum height=1.15cm] (ratio) at (4.75,-2.45)
+\node[test, minimum width=2.35cm, minimum height=1.15cm] (ratio) at (5.20,4.48)
   {compare in $\R^{\dd}$\\[1pt]$\displaystyle\frac{p(x)}{q(x)}$};
 
 \draw[fl, draw=blue!70] (q.east) -- node[lbl,above,sloped]{propose $x\sim q$} (ratio.north west);
 \draw[fl, draw=red!70]  (p.east) -- node[lbl,below,sloped]{score $p(x)$}      (ratio.south west);
 
-\node[good, minimum width=3.00cm, minimum height=0.95cm] (acc) at (8.25,-1.80)
-  {\textbf{accept} w.p. $\min\{1,p/q\}$\\[-2pt]\scriptsize emit the proposal $x$};
-\node[warn, minimum width=3.00cm, minimum height=0.95cm] (rej) at (8.25,-3.10)
-  {\textbf{reject}: draw residual\\[-2pt]\scriptsize $r \propto (p-q)_+$};
+\node[good, minimum width=3.30cm, minimum height=1.00cm] (acc) at (8.95,5.05)
+  {\textbf{accept} w.p. $\min\{1,p/q\}$};
+\node[warn, minimum width=3.30cm, minimum height=1.00cm] (rej) at (8.95,3.90)
+  {\textbf{reject}: draw residual\\[-1pt]$r \propto (p-q)_+$};
 
 \draw[fl] (ratio.east) -- (acc.west);
 \draw[fl] (ratio.east) -- (rej.west);
 
-\node[good, minimum width=2.70cm, minimum height=1.15cm] (out) at (12.45,-2.45)
+\node[good, minimum width=2.90cm, minimum height=1.15cm] (out) at (12.45,4.48)
   {emitted density\\[-1pt]$\tilde p = p$ \textbf{exactly}};
 \draw[fl] (acc.east) -- (out.west);
 \draw[fl] (rej.east) -- (out.west);
 
-\node[note, anchor=north] at (12.45,-3.12)
-  {lossless \emph{by identity}, not by measurement:\\[-2pt]
-   the zero point every fidelity metric must return};
+\node[note, anchor=west, text width=2.15cm] at (14.10,4.48)
+  {the zero point every fidelity metric must return};
 
-% Placed right of centre so that the "relax" arrow from (b) down to (c) has clear space on the left.
-\node[bad, minimum width=7.6cm, anchor=west] (prob) at (6.40,-4.45)
-  {\footnotesize\textbf{The obstruction (\S\ref{sec:collapse}).}\;
-   acceptance $=2-2\Phi(M/2)$ with $M=\delta\sqrt{\dd}$:\\[-1pt]
-   \footnotesize measured to fall $\mathbf{181\times}$ from $\dd{=}4$ to $\dd{=}128$ with $\delta$ held flat};
+\node[bad, anchor=north west, text width=15.9cm, minimum height=0.58cm] (prob) at (0.25,3.24)
+  {\textbf{But it stops working as the token grows (\S\ref{sec:collapse}).}\;
+   acceptance $=2-2\Phi(M/2)$ with $M=\delta\sqrt{\dd}$, measured to fall
+   $\mathbf{181\times}$ from $\dd{=}4$ to $\dd{=}128$ with the per-coordinate gap $\delta$ held flat.
+   One KL16 token survives this; a block of them, or an image, does not.};
 
 %======================= (c) projected verification =======================
-\node[hd]  at (0,-5.30) {(c) The natural repair: verify a $\kk$-dimensional statistic instead};
+\node[hd]  at (0,2.22) {(c) The repair image processing suggests: change basis, verify only what matters};
 
-\node[proj, minimum width=3.30cm, minimum height=1.00cm] (A) at (1.65,-6.25)
-  {project $s = Ax$\\[-2pt]\scriptsize $A\in\R^{\kk\times\dd}$, orthonormal rows, $\kk<\dd$};
-\node[test, minimum width=2.70cm, minimum height=1.00cm] (ratio2) at (5.70,-6.25)
+\node[proj, minimum width=3.55cm, minimum height=1.15cm, text width=3.15cm] (A) at (1.90,1.24)
+  {\centering project $s = Ax$\\[-1pt]e.g.\ the low-frequency DCT band, the coefficients JPEG keeps\par};
+\node[test, minimum width=2.35cm, minimum height=1.15cm] (ratio2) at (5.65,1.24)
   {compare in $\R^{\kk}$\\[1pt]$\displaystyle\frac{p_A(s)}{q_A(s)}$};
 
-\node[good, minimum width=4.30cm, minimum height=0.80cm] (gain) at (11.05,-5.80)
-  {\footnotesize acceptance \textbf{rises} to $2-2\Phi\!\big(\|A\delta\|/2\sigma\big)$};
-\node[bad,  minimum width=4.30cm, minimum height=0.80cm] (loss) at (11.05,-6.70)
-  {\footnotesize but $\|A_\perp\delta\|^{2}$ \textbf{escapes the test} and leaks};
+\node[good, minimum width=4.90cm, minimum height=0.78cm] (gain) at (10.15,1.68)
+  {acceptance \textbf{rises} to $2-2\Phi\!\big(\|A\delta\|/2\sigma\big)$};
+\node[bad,  minimum width=4.90cm, minimum height=0.78cm] (loss) at (10.15,0.78)
+  {but $\|A_\perp\delta\|^{2}$ \textbf{escapes the test} and leaks};
 
 \draw[fl] (A) -- (ratio2);
 \draw[fl] (ratio2.east) -- (gain.west);
 \draw[fl] (ratio2.east) -- (loss.west);
-\draw[fl, draw=violet!70, line width=0.9pt] (ratio.south west) to[out=-115,in=75]
-  node[lbl, left, pos=0.52, text=violet!70!black]{\bfseries relax} (A.north);
 
-\node[proj, minimum width=6.9cm, minimum height=0.55cm, fill=violet!6, draw=violet!45]
-  (rules) at (3.60,-7.20)
-  {\scriptsize rules tested: random $\cdot$ pca $\cdot$ signal-top $\cdot$ dct-low $\cdot$ signal-bottom (anti-control)};
+\node[test, anchor=west, text width=3.10cm, minimum height=1.15cm, fill=amber!18] (verdict)
+  at (13.05,1.24)
+  {\textbf{These two are one quantity.} Figure~\ref{fig:conservation} shows why.};
+\draw[fl, draw=amber!80!black] (gain.east) -- (verdict.north west);
+\draw[fl, draw=amber!80!black] (loss.east) -- (verdict.south west);
 
-%======================= the result =======================
-\node[test, minimum width=14.0cm, minimum height=1.30cm, align=center, fill=amber!18]
-  (cons) at (7.0,-8.55)
-  {\textbf{The result (\S\ref{sec:conservation}).}\quad
-   $\|A\delta\|^{2} + \|A_\perp\delta\|^{2} = \|\delta\|^{2}$\; for \emph{every} orthonormal $A$:
-   what the test sees and what escapes it are one conserved budget.\\[2pt]
-   \footnotesize Every rule, of every rank, therefore lands on \emph{one} acceptance/fidelity curve
-   (measured: all five rules within $\mathbf{4.0\%}$ of it over a $32\times$ range of $\dd$).
-   Only changing the model \emph{pair} moves the curve (\S\ref{sec:moving}).};
+\node[note, anchor=north west, text width=11.4cm, align=left] at (0.15,0.42)
+  {Five rules tested at matched $\kk$: random $\cdot$ pca $\cdot$ signal-top $\cdot$ dct-low $\cdot$
+   signal-bottom, an anti-control that verifies the \emph{least} important directions.};
 
 \end{tikzpicture}}
-\caption{\textbf{The setting, the obstruction, and what this paper shows.}
-\textbf{(a)}~A masked autoregressive model over continuous tokens, the 1-D analogue of MAR
-\citep{li2024autoregressive}. Unlike an image tokenizer, whose latent width is fixed by the
-pretrained VAE, here $\dd$ is free, which is what makes an acceptance-versus-$\dd$ curve measurable.
-\textbf{(b)}~One exact step; rejection is repaired from the residual $(p-q)_+$, making the emitted
-density equal the target exactly (Eq.~\ref{eq:exact}). We use that identity as the zero point for
-every fidelity metric, and \S\ref{sec:metric} reports one that failed it.
-\textbf{(c)}~Verifying a $\kk$-dimensional statistic raises acceptance, but the divergence orthogonal
-to it goes unchecked and leaks; conservation makes these one quantity read twice.}
+\caption{\textbf{The setting, the obstruction, and the repair that cannot work.}
+\textbf{(a)}~A masked autoregressive image model \citep{li2024autoregressive} draws one continuous
+KL16 token per patch from a small diffusion head. The tokenizer's width is fixed by a released
+checkpoint, so we run the same pipeline in one dimension, where $\dd$ is free and an
+acceptance-versus-$\dd$ curve exists at all.
+\textbf{(b)}~Rejection is repaired from the residual $(p-q)_+$, so the emitted density equals the
+target exactly (Eq.~\ref{eq:exact}); we use that identity as the zero point for every fidelity
+metric, and \S\ref{sec:metric} reports one that failed it.
+\textbf{(c)}~The transform-coding repair raises acceptance but leaves the orthogonal divergence
+untested. The two effects are not independent, which is the subject of
+Figure~\ref{fig:conservation}.}
 \label{fig:overview}
 \end{figure}

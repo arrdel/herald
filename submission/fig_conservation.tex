@@ -1,116 +1,155 @@
 % The conservation identity, drawn three ways: the geometry that produces it, the two things the two
-% halves control, and the budget picture that makes the corollary obvious. Laid out as three columns
-% so the figure stays short enough for the main text's page budget.
+% halves control, and the budget picture that makes the corollary obvious.
+%
+% Drawn at final print size (1 unit = 1cm, canvas pinned to 16.4cm) so \resizebox does not shrink the
+% labels. Panel (a) leans on Thales: the foot of the perpendicular from the tip of delta onto any
+% subspace through the origin lies on the circle with delta as diameter. Rotating A therefore slides
+% the corner around that circle, which is the identity made visible rather than asserted.
 \begin{figure}[t]
 \centering
-\resizebox{0.90\textwidth}{!}{%
+\resizebox{0.94\textwidth}{!}{%
 \begin{tikzpicture}[
   font=\sffamily\small,
-  hd/.style   = {font=\sffamily\bfseries\footnotesize, anchor=north west},
-  note/.style = {font=\sffamily\scriptsize, text=black!58, align=center},
+  hd/.style   = {font=\sffamily\bfseries\small, anchor=north west},
+  note/.style = {font=\sffamily\scriptsize, text=black!58, align=left},
   lbl/.style  = {font=\sffamily\scriptsize, inner sep=1.5pt},
-  vec/.style  = {-{Latex[length=2.0mm]}, line width=0.9pt},
+  vec/.style  = {-{Latex[length=2.2mm]}, line width=1.0pt},
+  ghost/.style= {-{Latex[length=1.8mm]}, line width=0.8pt, opacity=0.50},
 ]
+\path (0,-0.25) rectangle (16.40,6.75);
 
 %=================== (a) the Pythagorean split ===================
-\node[hd] at (0,4.55) {(a) One vector, one split};
+\node[hd] at (0,6.62) {(a) One vector, one split};
 
-\coordinate (O) at (0.45,0.95);
-% the verified subspace, drawn as a band through the origin
-\fill[blue!9] (0.20,0.74) rectangle (4.25,1.16);
-\draw[blue!45, line width=0.5pt] (0.20,0.95) -- (4.25,0.95);
-\node[lbl, text=blue!60!black, anchor=east] at (4.22,1.36) {verified subspace $\operatorname{row}(A)$};
+\coordinate (O)  at (0.70,3.00);
+\coordinate (D)  at (2.90,5.40);
+\coordinate (M)  at (1.80,4.20);
+\coordinate (P1) at (2.90,3.00);
+\coordinate (P2) at (3.425,4.272);
 
-% arc of fixed radius: the total is the thing that does not move
-\draw[densely dashed, black!35] ($(O)+(0:3.05)$) arc (0:66:3.05);
-\node[note, anchor=west, text=black!45] at (2.42,3.62) {$\|\delta\|$ is fixed by\\[-2pt] the model pair};
+% Thales circle: the locus of the corner as A rotates.
+\draw[densely dashed, black!32, line width=0.5pt] (M) circle (1.628);
 
-\coordinate (D) at (2.05,3.03);
-\coordinate (P) at (2.05,0.95);
-\draw[vec, black!80] (O) -- (D) node[pos=0.62, above left, lbl, inner sep=2pt]{$\delta=\mu_p-\mu_q$};
-\draw[vec, blue!70]  (O) -- (P) node[pos=0.5, below, lbl, text=blue!65!black]{$A\delta$ \emph{seen}};
-\draw[vec, red!70]   (P) -- (D) node[pos=0.5, right, lbl, text=red!65!black]{$A_\perp\delta$ \emph{escapes}};
-\draw[black!55, line width=0.4pt] ($(P)+(-0.19,0)$) -- ++(0,0.19) -- ++(0.19,0);
+% a second, ghosted choice of subspace: same hypotenuse, different corner
+\draw[black!30, line width=0.5pt, densely dotted] ($(O)+(25:-0.40)$) -- ($(O)+(25:3.55)$);
+\node[lbl, text=black!40, anchor=west] at ($(O)+(25:3.58)$) {$\operatorname{row}(A')$};
+\draw[ghost, blue!70] (O)  -- (P2);
+\draw[ghost, red!70]  (P2) -- (D);
+\draw[black!35, line width=0.4pt, opacity=0.55]
+  ($(P2)+(205:0.20)$) -- ++(115:0.20) -- ++(25:0.20);
 
-\node[draw=black!45, rounded corners=2pt, fill=amber!18, inner sep=3.5pt, anchor=north, font=\small]
-  at (2.2,0.42) {$\|A\delta\|^{2} + \|A_\perp\delta\|^{2} = \|\delta\|^{2}$};
-\node[note, anchor=north, text width=4.6cm] at (2.2,-0.28)
-  {Rotating $A$ slides the split around the arc:\\[-2pt]
-   the two legs trade off, the total cannot change.};
+% the primary choice: the verified subspace drawn as a band through the origin
+\fill[blue!9] (0.16,2.80) rectangle (3.52,3.20);
+\draw[blue!45, line width=0.5pt] (0.16,3.00) -- (3.52,3.00);
+\node[lbl, text=blue!60!black, anchor=north east] at (3.50,2.76) {verified subspace $\operatorname{row}(A)$};
+
+\draw[vec, black!80] (O) -- (D) node[pos=0.56, above left, lbl, inner sep=2pt]{$\delta=\mu_p-\mu_q$};
+\draw[vec, blue!70]  (O) -- (P1) node[pos=0.5, above, lbl, text=blue!65!black]{$A\delta$ \emph{seen}};
+\draw[vec, red!70]   (P1) -- (D) node[pos=0.28, right, lbl, text=red!65!black]{$A_\perp\delta$ \emph{escapes}};
+\draw[black!55, line width=0.4pt] ($(P1)+(-0.20,0)$) -- ++(0,0.20) -- ++(0.20,0);
+
+\node[lbl, text=black!45, anchor=north west, align=left, text width=1.85cm] at (3.58,5.98)
+  {rotate $A$ and the corner only slides around this circle};
+\draw[-{Latex[length=1.4mm]}, black!38, line width=0.4pt] (3.66,4.70) to[out=225,in=45] (3.42,4.50);
+
+\node[draw=black!45, rounded corners=2pt, fill=amber!18, inner sep=4pt, anchor=north west,
+      font=\small] at (0.00,2.20) {$\|A\delta\|^{2} + \|A_\perp\delta\|^{2} = \|\delta\|^{2}$};
+\node[note, anchor=north west, text width=5.15cm] at (0.00,1.42)
+  {The legs trade off along the circle. The hypotenuse is set by the model pair, so the total
+   cannot move at all.};
 
 %=================== (b) what each leg controls ===================
-\node[hd] at (4.95,4.55) {(b) What each leg controls};
+\node[hd] at (5.70,6.62) {(b) What each leg controls};
 
-\node[lbl, anchor=north west, text width=4.25cm] at (4.95,4.12)
-  {\textbf{Verified half.} The shaded overlap \emph{is} the acceptance rate.};
+\node[lbl, anchor=north west, text width=4.90cm] at (5.70,6.16)
+  {\textbf{Verified half sets acceptance.} The shaded overlap of the projected densities \emph{is}
+   the accept rate.};
 
-% -- verified half: overlap is the acceptance rate
-\begin{scope}[shift={(5.15,2.82)}, xscale=0.60, yscale=0.52]
-  \draw[black!45, line width=0.4pt] (-0.3,0) -- (5.5,0);
-  % overlap = min of the two densities, drawn as two half-regions meeting at the crossing point
-  \fill[black!30, opacity=0.6]
-    plot[domain=-0.30:1.875,samples=32] (\x,{1.05*exp(-(\x-2.6)*(\x-2.6)/0.42)}) --
-    plot[domain=1.875:4.50,samples=32] (\x,{1.05*exp(-(\x-1.15)*(\x-1.15)/0.42)}) --
+\begin{scope}[shift={(6.10,4.25)}, xscale=0.74, yscale=0.80]
+  \draw[black!45, line width=0.4pt] (-0.35,0) -- (5.35,0);
+  % overlap = min of the two densities: two half-regions meeting at the crossing point
+  % min(p,q) drawn as two half-regions meeting at the crossing point x = (1.30+2.45)/2
+  \fill[black!32, opacity=0.60]
+    plot[domain=-0.30:1.875,samples=36] (\x,{1.05*exp(-(\x-2.45)*(\x-2.45)/0.42)}) --
+    plot[domain=1.875:4.50,samples=36] (\x,{1.05*exp(-(\x-1.30)*(\x-1.30)/0.42)}) --
     (4.50,0) -- (-0.30,0) -- cycle;
-  \draw[blue!65, line width=0.7pt] plot[domain=-0.30:3.10,samples=44]
-       (\x,{1.05*exp(-(\x-1.15)*(\x-1.15)/0.42)});
-  \draw[red!65, line width=0.7pt]  plot[domain=0.65:4.50,samples=44]
-       (\x,{1.05*exp(-(\x-2.6)*(\x-2.6)/0.42)});
-  % arrow set between the peaks rather than above them, which keeps the column short
-  \draw[{Latex[length=1.4mm]}-{Latex[length=1.4mm]}, blue!70, line width=0.6pt]
-       (1.15,0.60) -- node[lbl, above, text=blue!65!black, inner sep=1pt]{$\|A\delta\|$} (2.6,0.60);
+  \draw[blue!65, line width=0.8pt] plot[domain=-0.30:3.15,samples=48]
+       (\x,{1.05*exp(-(\x-1.30)*(\x-1.30)/0.42)});
+  \draw[red!65, line width=0.8pt]  plot[domain=0.60:4.50,samples=48]
+       (\x,{1.05*exp(-(\x-2.45)*(\x-2.45)/0.42)});
+  \draw[black!35, line width=0.35pt, densely dotted] (1.30,1.06) -- (1.30,1.24);
+  \draw[black!35, line width=0.35pt, densely dotted] (2.45,1.06) -- (2.45,1.24);
+  \draw[{Latex[length=1.4mm]}-{Latex[length=1.4mm]}, black!70, line width=0.6pt]
+       (1.30,1.24) -- node[lbl, above, inner sep=1pt]{$\|A\delta\|$} (2.45,1.24);
+  \node[lbl, text=blue!65!black] at (0.10,0.72) {$q_A$};
+  \node[lbl, text=red!65!black]  at (3.72,0.72) {$p_A$};
+  \node[lbl, text=black!62, fill=white, fill opacity=0.80, text opacity=1, inner sep=1pt]
+       at (1.875,0.26) {overlap};
 \end{scope}
-\node[lbl, anchor=north west, text width=4.25cm] at (4.95,2.30)
-  {\textbf{Unverified half.} This gap is never tested; it is emitted as-is.};
 
-% -- unverified half: leaks
-\begin{scope}[shift={(5.15,1.10)}, xscale=0.60, yscale=0.52]
-  \draw[black!45, line width=0.4pt] (-0.3,0) -- (5.5,0);
-  \draw[blue!65, line width=0.7pt] plot[domain=-0.30:2.60,samples=44]
-       (\x,{1.05*exp(-(\x-1.15)*(\x-1.15)/0.42)});
-  \draw[red!65, line width=0.7pt]  plot[domain=0.35:3.35,samples=44]
-       (\x,{1.05*exp(-(\x-1.85)*(\x-1.85)/0.42)});
+\node[lbl, anchor=north west, text width=4.90cm] at (5.70,3.95)
+  {\textbf{Unverified half sets the cost.} This gap is never tested; it is emitted as it is.};
+
+\begin{scope}[shift={(6.10,2.05)}, xscale=0.74, yscale=0.80]
+  \draw[black!45, line width=0.4pt] (-0.35,0) -- (5.35,0);
+  % same left peak as the panel above, so the two gaps can be compared by eye
+  \draw[blue!65, line width=0.8pt] plot[domain=-0.30:2.90,samples=48]
+       (\x,{1.05*exp(-(\x-1.30)*(\x-1.30)/0.42)});
+  \draw[red!65, line width=0.8pt]  plot[domain=0.40:3.60,samples=48]
+       (\x,{1.05*exp(-(\x-2.00)*(\x-2.00)/0.42)});
+  \draw[black!35, line width=0.35pt, densely dotted] (1.30,1.06) -- (1.30,1.24);
+  \draw[black!35, line width=0.35pt, densely dotted] (2.00,1.06) -- (2.00,1.24);
   \draw[{Latex[length=1.4mm]}-{Latex[length=1.4mm]}, red!70, line width=0.6pt]
-       (1.15,0.60) -- node[lbl, above, text=red!65!black, inner sep=1pt]{$\|A_\perp\delta\|$} (1.85,0.60);
+       (1.30,1.24) -- node[lbl, above, text=red!65!black, inner sep=1pt]{$\|A_\perp\delta\|$} (2.00,1.24);
+  \node[lbl, text=blue!65!black] at (0.10,0.72) {$q_{A_\perp}$};
+  \node[lbl, text=red!65!black]  at (3.20,0.72) {$p_{A_\perp}$};
 \end{scope}
-\node[note, anchor=north west, text width=4.25cm, align=left] at (4.95,0.55)
-  {A longer blue leg means fewer accepts; a longer red leg means a worse output. Neither can shrink
-   without the other growing.};
+
+\node[note, anchor=north west, text width=4.90cm] at (5.70,1.75)
+  {Widen the black arrow and accepts fall; widen the red one and the output degrades. Panel~(a) is
+   the statement that neither narrows alone.};
 
 %=================== (c) the budget ===================
-\node[hd] at (9.75,4.55) {(c) One budget, three ways to spend it};
+\node[hd] at (11.10,6.62) {(c) One budget, three ways to spend it};
 
 \draw[{Latex[length=1.6mm]}-{Latex[length=1.6mm]}, black!60, line width=0.5pt]
-  (10.55,3.92) -- node[lbl, below, inner sep=1.5pt]{$\KL(p\|q)=\|\delta\|^{2}/2\sigma^{2}$} (13.95,3.92);
+  (12.05,5.95) -- node[lbl, below, inner sep=2pt]{total $=\KL(p\|q)=\|\delta\|^{2}/2\sigma^{2}$} (15.95,5.95);
 
-\foreach \i/\k/\frac in {0/{$\kk=1$}/0.14, 1/{$\kk=\dd/2$}/0.50, 2/{$\kk=\dd$}/1.00} {
-  \pgfmathsetmacro{\yy}{3.06 - \i*0.62}
-  \pgfmathsetmacro{\split}{10.55 + \frac*3.40}
-  \node[lbl, anchor=east] at (10.45,\yy) {\k};
-  \fill[blue!30, draw=blue!60, line width=0.4pt] (10.55,\yy-0.19) rectangle (\split,\yy+0.19);
-  \fill[red!22,  draw=red!60,  line width=0.4pt] (\split,\yy-0.19) rectangle (13.95,\yy+0.19);
+\foreach \i/\k/\frac/\txt in {%
+  0/{$\kk=1$}/0.16/{accepts often, leaks most},
+  1/{$\kk=\dd/2$}/0.50/{middling on both counts},
+  2/{$\kk=\dd$}/1.00/{accepts least, leaks nothing: exact}} {
+  \pgfmathsetmacro{\yy}{5.05 - \i*1.00}
+  \pgfmathsetmacro{\split}{12.05 + \frac*3.90}
+  \node[lbl, anchor=east] at (11.95,\yy) {\k};
+  \fill[blue!30, draw=blue!60, line width=0.4pt] (12.05,\yy-0.24) rectangle (\split,\yy+0.24);
+  \fill[red!22,  draw=red!60,  line width=0.4pt] (\split,\yy-0.24) rectangle (15.95,\yy+0.24);
+  \node[lbl, text=black!58, anchor=north west] at (12.02,\yy-0.30) {\txt};
 }
-\node[lbl, anchor=west, text=black!55] at (10.55,1.42) {every bar is the same length};
 
-\fill[blue!30, draw=blue!60, line width=0.4pt] (10.55,0.86) rectangle (10.82,1.06);
-\node[lbl, anchor=west, text=blue!65!black] at (10.90,0.96) {seen: costs acceptance};
-\fill[red!22,  draw=red!60,  line width=0.4pt] (10.55,0.36) rectangle (10.82,0.56);
-\node[lbl, anchor=west, text=red!65!black]  at (10.90,0.46) {escapes: costs fidelity};
+\draw[densely dashed, black!35, line width=0.4pt] (12.05,5.72) -- (12.05,2.38);
+\draw[densely dashed, black!35, line width=0.4pt] (15.95,5.72) -- (15.95,2.38);
+\node[lbl, anchor=north, text=black!55] at (14.00,2.34) {every bar is exactly the same length};
 
-\node[note, anchor=north west, text width=4.3cm, align=left] at (9.75,-0.06)
-  {A rule chooses only \emph{where} to cut the bar. Shortening it takes a better
-   model pair (\S\ref{sec:moving}).};
+\fill[blue!30, draw=blue!60, line width=0.4pt] (11.30,1.58) rectangle (11.63,1.82);
+\node[lbl, anchor=west, text=blue!65!black] at (11.71,1.70) {\emph{seen} by the test: costs acceptance};
+\fill[red!22,  draw=red!60,  line width=0.4pt] (11.30,1.08) rectangle (11.63,1.32);
+\node[lbl, anchor=west, text=red!65!black]  at (11.71,1.20) {\emph{escapes} the test: costs fidelity};
+
+\node[note, anchor=north west, text width=5.20cm] at (11.10,0.72)
+  {A rule chooses only \emph{where} to cut the bar, never how long it is. Shortening it takes a
+   closer model pair, which is what \S\ref{sec:moving} does.};
 
 \end{tikzpicture}}
 \caption{\textbf{Why projected verification cannot help.}
-\textbf{(a)}~For a shared-covariance Gaussian pair the whole problem is one vector, the mean gap
-$\delta$, and an orthonormal $A$ splits it into a part the test sees and a part orthogonal to the
-test. Because the split is orthogonal, Pythagoras fixes the sum.
-\textbf{(b)}~Neither leg is abstract: the one the test sees sets the overlap of the projected
-densities, which \emph{is} the acceptance rate, and the one that escapes is emitted unchecked, which
-\emph{is} the fidelity cost.
-\textbf{(c)}~So the divergence is a fixed budget and the rank $\kk$ only picks where to spend it. No
-choice shortens the bar, which is what confines all five rules to one measured curve
-(Figure~\ref{fig:onefrontier}) and why \S\ref{sec:moving} attacks the bar's length instead.}
+\textbf{(a)}~For a shared-covariance Gaussian pair the problem is one vector, the mean gap $\delta$,
+which an orthonormal $A$ splits into a seen part and an orthogonal one. By Thales the corner of that
+split lies on the circle having $\delta$ as its diameter, so another choice $A'$ (ghosted) only
+slides it around: the legs trade, and Pythagoras fixes the sum of their squares.
+\textbf{(b)}~Neither leg is abstract. One sets the overlap of the projected densities, which
+\emph{is} the acceptance rate; the other is emitted unchecked, which \emph{is} the fidelity cost.
+\textbf{(c)}~The divergence is therefore a fixed budget and $\kk$ only picks where to spend it,
+which is what confines all five rules to one measured curve (Figure~\ref{fig:onefrontier}) and why
+\S\ref{sec:moving} attacks the bar's length instead.}
 \label{fig:conservation}
 \end{figure}
