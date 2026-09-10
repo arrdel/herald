@@ -74,6 +74,10 @@ def build_decode_fn(vae, crop: int):
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--samples", default="experiments/E0.1-mar-base/samples.png")
+    p.add_argument("--images", default=None,
+                   help="a .pt tensor of images in [-1,1] from generate_mar_samples.py, used "
+                        "instead of slicing --samples. The montage path caps the count at the "
+                        "tiles it happens to contain and quantises to 8 bits; this does neither.")
     p.add_argument("--n-latents", type=int, default=4)
     p.add_argument("--crop", type=int, default=256, help="image size; 128 quarters the memory")
     p.add_argument("--k", type=int, default=16)
@@ -89,7 +93,10 @@ def main() -> None:
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    images = load_grid_images(Path(args.samples), limit=args.n_latents)
+    if args.images is not None:
+        images = torch.load(args.images, map_location="cpu")[: args.n_latents].float()
+    else:
+        images = load_grid_images(Path(args.samples), limit=args.n_latents)
     if args.crop != 256:
         off = (256 - args.crop) // 2
         images = images[:, :, off : off + args.crop, off : off + args.crop]
@@ -157,17 +164,40 @@ def main() -> None:
         "commit": git_commit(),
         "device": device,
         "config": vars(args),
+        "n_latents": len(per_latent),
+        # Quartiles rather than min/max alone: with more than a handful of latents the extremes are
+        # driven by the sample size, whereas the IQR says how much the spectrum varies image to image.
         "anisotropy_top_k": {"median": float(np.median(aniso)), "min": float(min(aniso)),
-                             "max": float(max(aniso))},
-        "effective_rank": {"median": float(np.median(erank)), "of_k": args.k},
+                             "max": float(max(aniso)),
+                             "q25": float(np.percentile(aniso, 25)),
+                             "q75": float(np.percentile(aniso, 75))},
+        "effective_rank": {"median": float(np.median(erank)), "of_k": args.k,
+                           "min": float(min(erank)), "max": float(max(erank)),
+                           "q25": float(np.percentile(erank, 25)),
+                           "q75": float(np.percentile(erank, 75))},
+        # The between-image spread of the top singular value is the finding E0.5 surfaced by
+        # accident: a latent-space tolerance buys different pixel error depending on the image.
+        "s_max_between_images": {
+            "median": float(np.median([r["s_max"] for r in per_latent])),
+            "min": float(min(r["s_max"] for r in per_latent)),
+            "max": float(max(r["s_max"] for r in per_latent)),
+            "q25": float(np.percentile([r["s_max"] for r in per_latent], 25)),
+            "q75": float(np.percentile([r["s_max"] for r in per_latent], 75)),
+        },
         "linearization_relative_error": {"median": float(np.median(lin_err)),
                                          "max": float(max(lin_err))},
         "per_latent": per_latent,
     }
 
-    print(f"\nanisotropy over top-{args.k} directions : median {np.median(aniso):.2f} "
-          f"(range {min(aniso):.2f}-{max(aniso):.2f})")
-    print(f"effective rank of those {args.k}          : median {np.median(erank):.2f}")
+    print(f"\n{len(per_latent)} latents")
+    print(f"anisotropy over top-{args.k} directions : median {np.median(aniso):.2f} "
+          f"(IQR {np.percentile(aniso, 25):.2f}-{np.percentile(aniso, 75):.2f}, "
+          f"range {min(aniso):.2f}-{max(aniso):.2f})")
+    print(f"effective rank of those {args.k}          : median {np.median(erank):.2f} "
+          f"(IQR {np.percentile(erank, 25):.2f}-{np.percentile(erank, 75):.2f})")
+    smax = [r["s_max"] for r in per_latent]
+    print(f"top singular value, between images      : median {np.median(smax):.2f} "
+          f"(range {min(smax):.2f}-{max(smax):.2f}, {max(smax)/min(smax):.1f}x spread)")
     print(f"linearization relative error            : median {np.median(lin_err):.3f}, "
           f"max {max(lin_err):.3f}")
 

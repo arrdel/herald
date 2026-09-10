@@ -126,6 +126,29 @@ def signal_impact_matrix(
     return torch.einsum("nod,noe->de", jac, jac) / n
 
 
+def disagreement_matrix(delta: torch.Tensor) -> torch.Tensor:
+    """``E[delta delta^T]`` for per-decision draft/target mean gaps ``delta`` of shape ``(N, d)``.
+
+    Every other rule in this module is a *heuristic* guess at where draft and target disagree: PCA
+    guesses that disagreement follows the data's principal directions, the signal rules guess it
+    follows the decoder's sensitivity. This one does not guess. It measures the disagreement
+    directly and ranks directions by how much of it they carry, which makes the top-``k``
+    eigenvectors the best rank-``k`` subspace for capturing ``delta`` in the mean-square sense.
+
+    That is an oracle and not a method -- it needs the target's own predictions on the very
+    decisions being verified, which a real verifier does not have before it runs the target. Its
+    purpose is to close the obvious escape route in the conservation argument: if even a rule built
+    from perfect knowledge of the disagreement lands on the same acceptance/fidelity curve as a
+    random subspace, then the curve is not an artefact of five badly chosen heuristics.
+
+    The second moment is deliberately uncentred. What the acceptance test sees at each decision is
+    the gap itself, not its deviation from an average gap, so subtracting the mean would rank
+    directions by the wrong quantity.
+    """
+    x = delta.reshape(-1, delta.shape[-1])
+    return x.T @ x / x.shape[0]
+
+
 def top_eigen_projection(matrix: torch.Tensor, k: int, largest: bool = True) -> torch.Tensor:
     """Orthonormal basis of the top (or bottom) ``k`` eigenvectors of a symmetric PSD matrix."""
     evals, evecs = torch.linalg.eigh(matrix)
