@@ -989,3 +989,185 @@ reflow without recovering space. 113 tests pass; build is clean with no unresolv
 **Still open (review P1):** seeds, a second dataset, the oracle discrepancy-aligned subspace,
 bootstrap CIs on frontier deviations, expanded KL16 sampling, and distillation continued to a useful
 acceptance regime.
+
+## 2026-09-10 — E0.7 / E1.2c / E1.5 — the review's remaining empirics, and a discrepancy between the theory's emitter and ours
+
+Second pass over the same reviewer's list, this time the items that needed either a proof or a GPU.
+Four experiments, two of which changed what the paper claims.
+
+### The emitter the theory describes is not the one we measure (no GPU, `scripts/check_projected_emitter.py`)
+
+The review asked us to define the projected output distribution explicitly as
+`p̃_A(s,u) = p_A(s) q(u|s)` and derive its leakage. Doing that surfaced a problem worth more than the
+edit itself: **`herald.eval.fidelity._emit` does not implement that sampler.** It applies the
+projected acceptance test but repairs rejections from the *full-space* residual `(p−q)₊`, not the
+projected one, so its emitted law is not `p̃_A`. Writing the reviewer's proposition without checking
+would have attributed to our experiment a decomposition belonging to a different algorithm.
+
+Measured both on a shared-covariance Gaussian pair (σ=1, per-coordinate gap 0.578, 4e5 samples/cell):
+
+| d | k | acc measured | acc predicted | xNLL of `p̃_A` | ‖A⊥δ‖²/2σ² | xNLL of ours |
+|---|---|---|---|---|---|---|
+| 16 | 4 | 0.564 | 0.563 | 2.012 | 2.005 | 1.068 |
+| 64 | 16 | 0.248 | 0.248 | 8.007 | 8.018 | 2.041 |
+| 128 | 16 | 0.247 | 0.248 | 18.694 | 18.709 | **4.701** |
+
+Two findings. The idealised emitter's excess NLL reproduces the conservation identity's leakage term
+to three decimals, which is a direct numerical confirmation that the conditional term of the chain
+rule is the divergence of a *real sampler* and not a bookkeeping remainder. And our repair leaks
+**strictly less** everywhere, by 4× at `d=128, k=16`, because it corrects a rejected position in
+every coordinate rather than only the verified ones. The direction is favourable: every frontier we
+report is traced under the *more* forgiving scheme, so the obstruction is understated, not inflated.
+Documented as its own appendix section rather than buried.
+
+### New Proposition 2: acceptance is one minus a total variation (no GPU)
+
+The review's other must-fix was a general bridge from the KL decomposition to acceptance. It turns
+out to be exact rather than an inequality. Under proposals from `q`, the projected test accepts with
+probability `∫min(p_T, q_T) = 1 − TV(p_T, q_T)`, and the data-processing inequality gives
+`TV(p_T,q_T) ≤ TV(p,q)`, hence `Ā_T ≥ Ā_exact` for **any** measurable statistic. This makes the null
+control a theorem: every statistic weakly raises acceptance however badly chosen, so the random
+projection's 180× gain was guaranteed before we ran it. Equality holds iff `{p>q}` is (up to a
+`p=q` set) an event of `σ(T)`, which is *weaker* than `p/q` being `σ(T)`-measurable — the first draft
+of the statement had the stronger, wrong condition.
+
+### E1.2c — the oracle-disagreement subspace does not escape the frontier (GPU 6, ~9 min)
+
+`python scripts/run_e12c_oracle.py --out experiments/E1.2c-oracle`
+
+The obvious objection to E1.2b is that all five rules are heuristics. This one is not: rank
+directions by the measured `E[δδᵀ]` and verify the top `k`. By construction it is the best rank-`k`
+subspace for capturing the disagreement, so it upper-bounds any linear rule of that rank.
+
+**The disagreement really is concentrated** — one direction carries 28–40% of `E‖δ‖²`, four carry
+78–91% — so the rule has genuine structure to exploit. It still buys nothing. Largest departure from
+the random curve at matched acceptance, as a fraction of the cost range: 0.9% (d=4), 5.2% (8), 3.1%
+(16), 4.7% (32), 5.3% (64), **2.8% (128)** — all inside the 4.0–15.9% envelope the five heuristics
+occupy, and every one on the *wrong* side (the oracle is if anything slightly worse than a random
+subspace). Perfect knowledge of where two models disagree does not locate an escape.
+
+### E1.5 — distillation shrinks the divergence it is supposed to shrink (GPU 5, ~50 min)
+
+`python scripts/measure_distillation_divergence.py --out experiments/E1.5-divergence`
+
+E1.4 measured the consequence (acceptance up) and asserted the mechanism (divergence down). A draft
+that merely inflated its variance would have produced the same table. Re-ran the identical
+trajectory — same checkpoints, schedule, seeds — recording `KL(p‖q)` by Monte Carlo and `M`:
+
+| d | KL before | KL after | drop | M before | M after | acc before | acc after |
+|---|---|---|---|---|---|---|---|
+| 4 | 0.514 | 0.322 | 37.3% | 0.320 | 0.212 | 0.6497 | 0.7170 |
+| 16 | 4.731 | 3.740 | 20.9% | 1.075 | 0.830 | 0.1764 | 0.2479 |
+| 64 | 19.281 | 14.490 | 24.8% | 1.922 | 1.551 | 0.0180 | 0.0434 |
+| 128 | 37.860 | 28.710 | 24.2% | 2.750 | 2.144 | 0.0033 | 0.0189 |
+
+The chain is now observed link by link. Acceptance rises monotonically across all five stages at
+every `d`; KL and M fall monotonically apart from sub-1% final-stage wiggles at `d ∈ {32,64,128}`.
+Re-measured acceptance agrees with E1.4's independent run (0.0033→0.0189 vs 0.0036→0.0208).
+
+**The interesting number is the flatness.** The divergence reduction is ~20–25% at *every* width
+while the acceptance it buys grows 1.12× → 5.72×. That is the Gaussian tail, and it is the sharpest
+evidence for §6's argument that we have.
+
+**Caveat recorded, not hidden:** computing `M` from the mixture's *total* variance folds
+between-component spread into the scale, making `M` smaller than the value governing acceptance, so
+`2−2Φ(M/2)` overpredicts badly (0.372 vs a measured 0.0189 at `d=128`). `M` is therefore read only as
+a before/after indicator here; `KL(p‖q)` carries the argument because it assumes nothing.
+
+### E0.7 — MAR-B vs MAR-H, trajectory-marginal, finally run (GPUs 4 and 7, ~2 and ~6 min)
+
+`CUDA_VISIBLE_DEVICES=7 python scripts/run_e07.py --cfg 3.0 --num-images 4 --n-capture 12 --max-positions 24`
+
+The single highest-value open experiment from the last entry; the GPUs freed up. This is the
+measurement E0.6 could not make.
+
+| | guidance 3.0 (188 positions) | guidance 1.0 (64 positions) |
+|---|---|---|
+| σ target / draft | 0.4007 / 0.3984 | 0.4823 / 0.4841 |
+| per-coordinate \|δ\|/σ, median | 0.280 | 0.221 |
+| separation `M`, mean / median | 1.850 / 1.683 | 1.400 / 1.256 |
+| predicted acceptance (95% CI) | **0.397** [0.369, 0.425] | 0.513 [0.473, 0.550] |
+
+**`M ≈ 1.9`, not 138.** The final-step figure was an artefact of a degenerate transition, exactly as
+E0.6 argued but could not demonstrate. Three consequences. Shared covariance — the assumption
+Proposition 4 needs — holds to within 0.6% for this pair, so the identity is near-exact here rather
+than approximate. Exact speculative verification of *one* KL16 token is viable, at ~0.4 acceptance.
+And the pair lands where the feasibility map put it: the map calls for 0.34σ at acceptance 0.5, the
+measurement gives 0.28–0.38σ. The map is now calibrated against a published pair rather than only
+against our testbed. Guidance costs acceptance (1.0 → 3.0 moves `M` from 1.40 to 1.85), because it is
+applied to both models but sharpens the larger one more.
+
+This is a prediction from a measured `M` under a Gaussian model, **not** an end-to-end speculative
+run; the limitations section now says so explicitly, and the old "remains unmeasured" sentence is
+gone.
+
+### Paper changes
+
+- **New Proposition 2** (TV/data-processing) and the explicit emitter `p̃_A` in Eq. 3, with
+  Proposition 3's remainder rewritten as `KL(p‖p̃_A)` — the review's two theory must-fixes.
+- **Corollary 1 scoped** to shared isotropic covariance in its statement, with a paragraph saying
+  what survives without it (Props 2–3) and what does not (the single curve).
+- **Bootstrap CIs** on the collapse statistic, in Table 2 and a new appendix section. At `d=128`,
+  4.0% [3.3, 5.6]; the intervals at `d=4` and `d=128` are disjoint, so the tightening with dimension
+  is resolved rather than noise. Bootstrapping a maximum is upward-biased and the appendix says so,
+  which is why the energy-distance point estimate at `d=128` falls below its own interval.
+- **Wording**, per the review: "moves the frontier" → "shifts the attainable acceptance at zero
+  fidelity cost"; the related-work exactness claim narrowed to "the family of exact speculative
+  accelerations that preserve the target distribution by construction"; the conclusion's absolute
+  phrase replaced with the scoped one and the nonlinear-statistic question raised as the open problem.
+- **CSpD appendix renamed** to "Audit of a Prior Continuous Speculative-Decoding Criterion".
+
+**Page budget — decided: stay at 13 pages.** The additions cost about a page. Trimming duplicated
+null-control prose in §4.1 (now a theorem in §4.2) and compressing the new paragraphs recovered most
+of it, leaving the main body at 13 pages rather than 12, overflowing by roughly 26 lines. TMLR has no
+hard limit: 12 pages of main content earns reviewers a 2-week deadline and anything longer a 4-week
+one, with no effect on the acceptance criteria. Since the extra page is precisely the content the
+review demanded, the slower window is the better trade and no further cutting is planned.
+
+**Still open (review P1):** seeds and a second dataset.
+
+---
+
+## E0.5b — KL16 decoder Jacobian at N=50 (2026-09-10)
+
+**Question.** The review called the four-latent spectrum a pilot, and rightly: the between-image
+spread is exactly the quantity four samples estimate worst. Does the "no compact perceptual band"
+reading survive an order of magnitude more latents?
+
+**Setup.** `scripts/generate_mar_samples.py` draws 50 MAR-B samples with E0.1's settings
+(cfg 2.9, 256 iters, seed 0) and stores them as float32 rather than as an 8-bit montage, so the
+sample count is no longer capped by the grid and the images are not quantised on the way in.
+`scripts/run_e05.py` gained `--images` to consume that tensor, and now reports IQRs rather than
+min/max alone. On GPU the Jacobian pass is 14 s per latent against ~200 s on CPU, so all 50 run in
+about 13 minutes. Sanity check: re-running latent 0 through the montage path reproduces the original
+anisotropy to 4.05 vs 4.08.
+
+**Result — the headline holds, and tightens.**
+
+| quantity | N=4 | N=50 (median, IQR) |
+| --- | --- | --- |
+| anisotropy over top-64 | 3.31 | **3.16** (2.70–3.51) |
+| effective rank of 64 | 61.06 | **61.55** (61.11–62.19) |
+| DCT magnitude at rank 64 | 1.5% | **1.7%** |
+| Jacobian magnitude at rank 64 | 30% | **32%** |
+
+88% of latents have anisotropy below 4 and 92% have effective rank at least 60, so this is a property
+of the decoder rather than of four lucky images.
+
+**Two numbers moved, and both are now stated honestly in §5.**
+
+- *Between-image scale.* `σ_max` runs 17.7–136.5 across 50 images, a 7.7× spread, against the 3×
+  the four-image pilot showed. The paper said "threefold different pixel error"; it now says nearly
+  eightfold. This strengthens the incidental finding — a latent-space tolerance is marginal over
+  images, not conditional on one — but it is a case of the pilot having understated a problem.
+- *Linearisation check.* The old caption claimed median relative error 0.054, max 0.076. Pooled over
+  50 latents it is median 0.093, max 0.431, which looks worse until it is split by direction: the
+  leading direction is median 0.018 (the 0.431 is a single outlier), while the 64th direction sits a
+  consistent +12% — the finite-difference gain *exceeds* the Jacobian's prediction in all 50 latents.
+  So the true `σ_64` is slightly larger than measured, the reported anisotropy is an overestimate of
+  how uneven the decoder is, and the isotropy conclusion is on the safe side. §5 now says this rather
+  than quoting a pooled number that hides the split.
+
+**Paper changes.** Table 4 is now a summary over 50 latents (median / IQR / range) instead of four
+per-latent rows, which is both more informative and one line shorter; §5's prose, the DCT contrast,
+and the "what it does not say" caveats are updated, and the "four latents is a pilot" hedge is gone.
