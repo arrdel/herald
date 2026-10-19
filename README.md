@@ -1,173 +1,114 @@
 # HERALD
 
-**H**igh-throughput **E**mbedding-space **R**isk-controlled **A**cceleration of **L**atent **D**iffusion
+**The dimensionality barrier in continuous speculative sampling.**
 
-Speculative sampling for continuous-token generative models, where drafting and verification
-both happen in the JEPA embedding space rather than in data-token space.
+Masked autoregressive image models such as [MAR](https://arxiv.org/abs/2406.11838) generate an
+image as a grid of continuous tokens, each drawn from a small diffusion head that takes about 98% of
+generation time. Speculative sampling is the standard lossless way to cut that latency, and
+[CSpD](https://arxiv.org/abs/2411.11925) brought it to continuous tokens. This repository measures
+when exact continuous speculative verification can work at all, and what can and cannot rescue it.
 
----
+## Findings
 
-## The one-paragraph version
+1. **Exact acceptance collapses with token width.** For a draft and target that disagree by a fixed
+   amount per coordinate, acceptance is `2 - 2Φ(δ√d / 2)`: a Gaussian tail in `√d`. In a controlled
+   sweep, acceptance falls **181×** (0.6425 to 0.0035) as the token widens from `d=4` to `d=128`
+   while the per-coordinate gap stays flat. A training-free Gaussian reference follows the same
+   curve to `d=4096`.
+2. **Verifying a projection cannot escape it.** The natural image-processing repair is to verify
+   only a low-dimensional statistic of each token, the way JPEG keeps a low-frequency DCT band. By
+   the chain rule for KL divergence, an orthonormal projection leaves the total draft-target
+   divergence unchanged and only decides how much of it the test sees. Five very different subspace
+   rules (random, PCA, signal-top, DCT-low, and an anti-control) span 48 nats of cost yet lie within
+   **4.0%** of one acceptance-fidelity curve. An oracle given the true disagreement directions does
+   no better.
+3. **The image decoder offers no band to exploit.** Over 50 MAR-B latents, the KL16 decoder's
+   Jacobian has effective rank 61.6 of 64. Its spectrum decays far more slowly than the DCT spectrum
+   of the images it produces.
+4. **Distillation is the lever that works.** Pulling the draft toward the target reduces the
+   divergence itself and raises exact acceptance by up to **5.72×** at `d=128`, at zero fidelity
+   cost. The gain grows with dimension.
 
-Continuous autoregressive generators (MAR, D-JEPA) beat their discrete-token counterparts on
-image quality, but they are slow: every token requires a full diffusion/flow trajectory through
-a denoising head. Speculative decoding is the standard fix, and it works beautifully for discrete
-LLMs — but the discrete machinery (softmax ratios, top-*m* sets, tree verification) does not
-survive the move to continuous space. The single existing continuous method, CSpD, has to
-introduce an *inner temperature of 42* into its acceptance ratio to get any acceptance at all.
-We claim this is not an implementation detail but a symptom: **exact speculative verification in
-continuous space is defeated by dimensionality**, and the field has been hiding this behind a
-relaxation that silently voids the losslessness guarantee. HERALD proposes a different contract.
-Instead of pretending to preserve the target's density over 16-dimensional VAE tokens, we
-preserve a *learned low-dimensional semantic statistic* of the output, and we back it with a
-finite-sample, distribution-free guarantee instead of an asymptotic one. The machinery to do
-this is already sitting unused inside every D-JEPA checkpoint.
+On a real model pair, MAR-B and MAR-H sit a median 0.28σ apart per coordinate at `d=16`, which
+predicts an exact acceptance of about 0.40 for one token and effectively zero for an image-width
+block.
 
-## The gap, stated precisely
+The name comes from the project's starting hypothesis: verify a learned low-dimensional semantic
+statistic (from a JEPA encoder) under a conformal guarantee. Finding 2 is why that plan cannot beat
+the frontier, and the repository now documents the barrier instead.
 
-D-JEPA trains three components jointly: a context encoder, an **EMA target encoder**, and a
-**feature predictor** whose output `z` is supervised by *both* a diffusion loss and a JEPA
-prediction loss against the target encoder's embeddings.
+## Why a testbed
 
-At inference time, `sample_tokens()` uses `z` only as conditioning for the denoising MLP. The
-target encoder is never called. The JEPA loss is never evaluated.
-
-> **D-JEPA trains a verifier and then discards it at inference.
-> We claim it is exactly the verifier that speculative sampling needs.**
-
-This gives two things for free, with no new parameters and no new training:
-
-| Role | What we reuse | Why it is free |
-| --- | --- | --- |
-| **Drafter** | the predictor output `z` | Already computed once per iteration for *all* masked positions, in a single parallel transformer pass. The expensive part is the per-token denoising head that consumes it. |
-| **Verifier** | the EMA target encoder + JEPA loss | Already trained to score exactly the quantity "does this token's embedding match what the predictor expected?" Its training-time residual distribution is a ready-made calibration set. |
-
-## Three claims, in order of how much we believe them
-
-**C1 (diagnostic, high confidence).** Acceptance probability under exact continuous speculative
-decoding decays sharply with token dimension *d*. CSpD's reported speedups depend on
-`inner_temperature=42.` and `ratio=0.15`; with the temperature set to 1 (the genuinely lossless
-setting) acceptance collapses. This is measurable in an afternoon and is publishable on its own
-as a negative result about the current state of continuous speculative decoding.
-
-**C2 (mechanism, medium confidence — *restated 2026-09-02 after E1.2a*).** Verifying a
-*k*-dimensional semantic projection instead of the *d*-dimensional token restores high acceptance,
-because the density ratio concentrates far more slowly in the projected space. The JEPA predictor
-supplies both the projection and the reference distribution.
-
-*The first half of that is now measured, and it is free.* E1.2a verified a **random** orthonormal
-projection and found acceptance is governed by *k* essentially alone — 0.62 at *k*=4 for every *d*
-from 4 to 128 (coefficient of variation 2.4%), lifting acceptance from 0.0035 to 0.64 at *d*=128
-without any structure whatsoever. So "low-dimensional verification restores acceptance" is
-established *by the null control* and is not evidence for a learned projection.
-
-**What C2 must therefore claim is fidelity, not acceptance.** At matched *k* every rule sits at
-roughly the same acceptance, so a semantic projection can only win on *what it discards*.
-
-E1.2-frontier makes that concrete. Running a full speculative step with the correct residual
-sampler, the acceptance a random projection buys costs about **0.4 nats per discarded dimension**,
-and the total cost is well described by `(d − k)·c(k)` — the per-dimension figure matches across a
-4× range of *d*. So **acceptance is governed by the dimension you verify, fidelity by the dimension
-you don't**, and low-dimensional verification is not a free lunch at scale but a linearly expensive
-one. C2 therefore reduces to a single measurable number: HERALD's projection must achieve a **lower
-`c(k)`** than a random one.
-
-**C3 (method, to be earned).** HERALD achieves ≥2× fewer NFE than CSpD at matched FID/CMMD,
-while carrying a *stronger* guarantee than CSpD actually delivers: distribution-free,
-finite-sample control of semantic deviation via conformal risk control, rather than an exactness
-claim that the temperature hack invalidates.
-
-### What would falsify this
-
-- C1 fails if acceptance at temperature 1 is already high — then CSpD is genuinely lossless and
-  the motivation evaporates. **Check this first, before writing any method code.**
-- C2 fails if acceptance in semantic space does not improve over token space at matched
-  guarantee strength, or if the improvement is entirely explained by the projection discarding
-  the information that mattered. **The second clause has partly fired:** E1.2a shows a random
-  projection captures the whole acceptance gain, so C2 now stands or falls on fidelity at matched
-  *k* against E1.2a's curve, not on acceptance.
-- C3 fails if few-step distillation (consistency models, shortcut models) dominates on the
-  speed/quality frontier, making speculation the wrong tool. This is the most likely failure
-  mode and we benchmark against it from day one rather than at rebuttal time.
-
-## Why the guarantee change is a feature, not a retreat
-
-Speculative decoding's selling point is losslessness. Weakening it needs justification, so:
-
-1. The exact guarantee is over the *VAE token* distribution, which is already an arbitrary
-   lossy encoding of the image. Exactness with respect to it is not exactness with respect to
-   anything a user cares about.
-2. CSpD does not actually deliver the exact guarantee it advertises (see C1).
-3. Conformal risk control gives a *finite-sample* statement with no distributional assumptions,
-   whereas the classical acceptance rule's guarantee is exact only when the densities are exact —
-   which for a learned diffusion head they are not.
-
-So the honest comparison is not "exact vs. approximate" but "an unverifiable exactness claim about
-an uninteresting space vs. a verifiable coverage claim about a meaningful one."
-
-## Status
-
-Pre-experimental. Nothing has been run yet. See `docs/RESEARCH_PLAN.md` for the phase plan and
-`docs/EXPERIMENT_LOG.md` for results as they land. `docs/RELATED_WORK.md` records what is already
-taken, with verification notes.
+A released KL16 checkpoint is fixed at `d=16`, so an image pipeline gives one point on the
+acceptance-versus-width curve. The main sweeps therefore use a structurally matched continuous-token
+system in which `d` is a constructor argument: a patch VAE over multichannel time-series windows
+(ETTh1), a masked autoregressive transformer, and a Gaussian-mixture per-token head that keeps the
+acceptance ratio in closed form. The sweep includes `d=16`. The 1-D DCT of a window plays the role
+the 2-D DCT plays in JPEG. Image-side measurements (latency, decoder spectrum, MAR-B/MAR-H
+separation) run on the public MAR checkpoints.
 
 ## Setup
 
 ```bash
-conda activate herald
+conda create -n herald python=3.10 && conda activate herald
+pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
 pip install -e ".[dev]"
+
+bash scripts/setup_baselines.sh       # clone MAR, CSpD, D-JEPA, jepa-guidance into baselines/
+bash scripts/download_checkpoints.sh  # MAR, D-JEPA and KL16 VAE weights into checkpoints/
+
+pytest                                # unit tests for the acceptance rules, emitters and metrics
 ```
 
-Baselines are cloned under `baselines/` (git-ignored):
+The experiments were run on RTX A6000 GPUs with CUDA 12.1. The analytic results (E0.3a, E0.8) and
+the emitter check need no GPU.
 
-```bash
-bash scripts/setup_baselines.sh     # clone repos
-bash scripts/download_checkpoints.sh # MAR + D-JEPA weights, KL16 VAE
-```
+## Reproducing the results
 
-Hardware assumed: 8× RTX A6000 (48 GB each), driver 530 / CUDA 12.1.
-Every phase-1 and phase-2 experiment is inference-only on public checkpoints.
+Each run writes `config.json`, `results.json` and a log under `experiments/<id>/` (git-ignored).
+`docs/EXPERIMENT_LOG.md` records the exact command, the numbers, and what each result changed.
+
+| Result | Experiment | Script |
+| --- | --- | --- |
+| Diffusion head is 98.3% of MAR wall time | E0.1 | `scripts/run_e01.py` |
+| What CSpD's acceptance test computes on MAR pairs | E0.3, E0.3a | `scripts/run_e03.py`, `scripts/analyze_cspd_fixed_term.py` |
+| KL16 decoder has no compact perceptual band | E0.5, E0.5b | `scripts/run_e05.py`, `scripts/plot_e05_spectrum.py` |
+| MAR-B vs MAR-H separation | E0.6, E0.7 | `scripts/run_e06.py`, `scripts/run_e07.py` |
+| Analytic reference and feasibility map | E0.8 | `scripts/run_e08.py`, `scripts/plot_e08_feasibility.py` |
+| Acceptance collapses with token width | E1.1 | `scripts/run_e11.py` |
+| Collapse is not a training-budget artefact | E1.1b, E1.1c | `scripts/run_e11b.py`, `scripts/analyze_e11b.py` |
+| Random-projection null control | E1.2a, E1.2-frontier | `scripts/run_e12a.py`, `scripts/run_e12_frontier.py` |
+| Five subspace rules, one frontier | E1.2b | `scripts/run_e12b.py`, `scripts/analyze_e12b.py`, `scripts/bootstrap_frontier.py` |
+| Oracle subspace does not escape | E1.2c | `scripts/run_e12c_oracle.py` |
+| Projected verification's emitted distribution | | `scripts/check_projected_emitter.py` |
+| Distillation moves the frontier | E1.4, E1.5 | `scripts/run_e14.py`, `scripts/measure_distillation_divergence.py` |
 
 ## Layout
 
 ```
 herald/
-├── drafters/      predictor-as-drafter, few-step flow drafts
-├── verifiers/     token-space (CSpD-exact) and semantic-space acceptance rules
-├── calibration/   conformal risk control, nonconformity scores
-├── models/        adapters onto MAR / D-JEPA checkpoints; time-series tokenizer + MAR
-├── metrics/       FID, CMMD, NFE accounting, acceptance-rate instrumentation,
-│                  paired pixel-domain audit and decoder sensitivity (E0.4 / E0.5)
-├── train/         training harness for the time-series testbed (the only thing that trains)
-└── data/          ImageNet-256 latents, time-series testbeds
-docs/              plan, related work, running experiment log
-baselines/         upstream repos, unmodified (git-ignored)
-checkpoints/       MAR / D-JEPA / KL16 weights (git-ignored)
-experiments/       one directory per run, config + results + notes
+├── verifiers/     exact token-space rule, CSpD's rule, projected and structured-subspace rules
+├── eval/          acceptance and fidelity measurement for a full speculative step
+├── models/        MAR and CSpD adapters; time-series tokenizer and masked AR model
+├── metrics/       NFE accounting, pixel-domain metrics, KL16 decoder sensitivity
+├── train/         training harness for the time-series testbed
+├── data/          time-series loaders
+└── calibration/   conformal risk control (from the original hypothesis)
+scripts/           one entry point per experiment, plus analysis and plotting
+tests/             unit tests
+docs/              experiment log, research plan, related-work notes, result figures
 ```
 
-## Testbeds
+## References
 
-**Primary — ImageNet 256×256, inference-only.** MAR-B/L/H and D-JEPA-B/L/H are public. This is
-where the headline numbers live and where CSpD is directly comparable.
+- MAR: Li et al., *Autoregressive Image Generation without Vector Quantization*, NeurIPS 2024.
+  [arXiv:2406.11838](https://arxiv.org/abs/2406.11838)
+- CSpD: Wang et al., *Continuous Speculative Decoding for Autoregressive Image Generation*, 2024.
+  [arXiv:2411.11925](https://arxiv.org/abs/2411.11925)
+- Leviathan et al., *Fast Inference from Transformers via Speculative Decoding*, ICML 2023.
+  [arXiv:2211.17192](https://arxiv.org/abs/2211.17192)
+- D-JEPA: [arXiv:2410.03755](https://arxiv.org/abs/2410.03755), ICLR 2025.
 
-**Secondary — time-series (ETTh1, UCI Electricity).** Trainable from scratch in hours, so it is
-the only place we can sweep token dimension *d* with full control. C1's dimension-scaling curve
-comes from here; ImageNet only gives us two or three points on it.
+## Author
 
-## Key references
-
-Verified against the actual papers, not summaries. Full notes in `docs/RELATED_WORK.md`.
-
-- D-JEPA — [arXiv:2410.03755](https://arxiv.org/abs/2410.03755), ICLR 2025. The predictor and
-  target encoder we repurpose.
-- CSpD — [arXiv:2411.11925](https://arxiv.org/abs/2411.11925). The only continuous speculative
-  decoding method; our direct baseline and the target of C1.
-- MAR — [arXiv:2406.11838](https://arxiv.org/abs/2406.11838). Diffusion loss for continuous AR;
-  D-JEPA and CSpD both build on this codebase.
-- ARC-Decode — ICML 2026. Conformal risk control for speculative decoding, **discrete LLMs only**.
-  Closest prior art on the guarantee axis; differentiated by space, not by tool.
-- SPLICE — [arXiv:2605.00126](https://arxiv.org/abs/2605.00126). JEPA latents + flow matching +
-  adaptive conformal inference for time-series. Our secondary testbed inherits its setup.
-- Beyond Generative Priors — [arXiv:2605.24631](https://arxiv.org/abs/2605.24631). JEPA as a
-  density proxy for guidance; evidence that JEPA embeddings carry usable density information.
+Adele Chinda

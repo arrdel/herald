@@ -35,12 +35,15 @@ dist/
 .env
 .venv/
 
-# LaTeX build artefacts (submission/main.pdf is committed deliberately)
-submission/*.aux
-submission/*.bbl
-submission/*.blg
-submission/*.log
-submission/*.out
-submission/*.synctex.gz
-submission/*.fls
-submission/*.fdb_latexmk
+# Paper, course deliverables and talks: kept locally and in Overleaf, not in the code repo
+/submission/
+/ProjectTemplate/
+/slides/
+
+# Editor/agent config and empty scaffolding
+/.cursor/
+/assets/
+/configs/
+
+# Stray run logs at the top of experiments/ (per-run logs live in experiments/<id>/)
+experiments/*.log
