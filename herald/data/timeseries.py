@@ -132,6 +132,49 @@ def build_bundle(
     )
 
 
+def expanding_cv_bundles(
+    series: np.ndarray,
+    window: int = 96,
+    stride: int = 1,
+    n_folds: int = 3,
+    val_frac: float = 0.1,
+    test_frac: float = 0.2,
+) -> list[TimeSeriesBundle]:
+    """Expanding-origin chronological cross-validation folds with disjoint test blocks.
+
+    The final fold matches ``build_bundle(series, fractions=(1 - val_frac - test_frac, val_frac,
+    test_frac))`` sample-for-sample. Earlier folds step backwards by ``n_test`` steps so test
+    blocks never overlap, each split is strictly chronological, and each standardizer is fit on
+    that fold's training prefix alone.
+    """
+    n = len(series)
+    n_val = int(n * val_frac)
+    n_test = int(n * test_frac)
+    bundles: list[TimeSeriesBundle] = []
+    for k in range(1, n_folds + 1):
+        test_end = n - (n_folds - k) * n_test
+        test_start = test_end - n_test
+        val_start = test_start - n_val
+        if val_start < window:
+            raise ValueError(
+                f"fold {k}/{n_folds} training prefix ({val_start}) shorter than window ({window})"
+            )
+        train_raw = series[:val_start]
+        val_raw = series[val_start:test_start]
+        test_raw = series[test_start:test_end]
+        scaler = Standardizer.fit(train_raw)
+        bundles.append(
+            TimeSeriesBundle(
+                train=SlidingWindowDataset(scaler.transform(train_raw), window, stride),
+                val=SlidingWindowDataset(scaler.transform(val_raw), window, stride),
+                test=SlidingWindowDataset(scaler.transform(test_raw), window, stride),
+                standardizer=scaler,
+                n_channels=series.shape[1],
+            )
+        )
+    return bundles
+
+
 def load_etth1(path: str | Path = "data/ETTh1.csv") -> np.ndarray:
     """Load ETTh1 as a ``(T, 7)`` array. Hourly electricity transformer temperature."""
     import pandas as pd

@@ -1171,3 +1171,41 @@ of the decoder rather than of four lucky images.
 **Paper changes.** Table 4 is now a summary over 50 latents (median / IQR / range) instead of four
 per-latent rows, which is both more informative and one line shorter; §5's prose, the DCT contrast,
 and the "what it does not say" caveats are updated, and the "four latents is a pilot" hedge is gone.
+
+---
+
+## E1.6 — Multi-seed (3 seeds) and 3-fold expanding chronological CV sweep (2026-11-23)
+
+**Ran:** `scripts/run_e16_cv_seeds.py` across 8× RTX A6000 GPUs (~10 min wall-clock for 30 tasks):
+- **Multi-seed suite:** `seeds ∈ {0, 1, 2}` on Fold 3 (standard 70/10/20 ETTh1 split: 12,099 train / 1,647 val / 3,389 test windows) across `d ∈ {4, 8, 16, 32, 64, 128}`.
+- **Chronological CV suite:** 3-fold expanding-origin CV via `herald.data.expanding_cv_bundles` (`seed = 0`, all 6 dims), fitting each fold's standardizer strictly on its training prefix before windowing so test blocks (3,389 windows each) are future and mutually disjoint:
+  - Fold 1: 5,131 train / 1,647 val / 3,389 test (months 9–12)
+  - Fold 2: 8,615 train / 1,647 val / 3,389 test (months 13–16)
+  - Fold 3: 12,099 train / 1,647 val / 3,389 test (months 17–20)
+
+Each run trained a fresh tokenizer (2k steps), target/draft MAR (4k steps), measured exact collapse, then ran 10k steps of mode-covering KL distillation with exact `KL(p||q)`, `M`, and `Excess NLL` audits. Configs and per-task JSONs in `experiments/E1.6-cv-seeds/results.json`.
+
+**Result — multi-seed (Fold 3, mean ± std over 3 seeds):**
+
+| d | collapse acc. | before → after (distill) | gain | KL drop | Excess NLL after |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 0.6271 ± 0.0075 | 0.6275 → 0.6908 | 1.10 ± 0.01× | 32.4 ± 3.2% | +0.004 ± 0.021 |
+| 8 | 0.3874 ± 0.0169 | 0.3880 → 0.4637 | 1.20 ± 0.03× | 27.0 ± 0.7% | -0.005 ± 0.032 |
+| 16 | 0.1881 ± 0.0131 | 0.1898 → 0.2534 | 1.33 ± 0.01× | 23.6 ± 2.3% | -0.008 ± 0.023 |
+| 32 | 0.0702 ± 0.0082 | 0.0727 → 0.1228 | 1.69 ± 0.13× | 24.1 ± 4.8% | +0.046 ± 0.073 |
+| 64 | 0.0195 ± 0.0024 | 0.0188 → 0.0511 | 2.74 ± 0.35× | 24.5 ± 0.8% | +0.056 ± 0.055 |
+| 128 | 0.0036 ± 0.0017 | 0.0033 → 0.0194 | **6.23 ± 1.70×** | 26.1 ± 2.5% | -0.065 ± 0.419 |
+
+**Result — 3-fold expanding chronological CV (`seed = 0`, mean ± std over 3 folds):**
+
+| d | collapse acc. | before → after (distill) | gain | KL drop |
+| --- | --- | --- | --- | --- |
+| 4 | 0.5963 ± 0.0496 | 0.5949 → 0.6565 | 1.10 ± 0.01× | 28.2 ± 6.6% |
+| 8 | 0.3493 ± 0.0717 | 0.3463 → 0.4156 | 1.20 ± 0.03× | 25.4 ± 3.4% |
+| 16 | 0.1648 ± 0.0684 | 0.1644 → 0.2162 | 1.33 ± 0.07× | 21.5 ± 0.9% |
+| 32 | 0.0615 ± 0.0359 | 0.0592 → 0.1038 | 1.95 ± 0.51× | 25.1 ± 2.4% |
+| 64 | 0.0179 ± 0.0099 | 0.0164 → 0.0459 | 2.84 ± 0.33× | 26.1 ± 4.7% |
+| 128 | 0.0031 ± 0.0023 | 0.0027 → 0.0123 | **4.76 ± 0.64×** | 24.7 ± 2.9% |
+
+**Caveats:** Fold 1 has only 5,131 training windows and exhibits higher baseline gap (`δ = 0.313` at `d=16`, `0.411` at `d=128`), lowering baseline acceptance across folds slightly while preserving both the dimensional collapse (~192× across folds) and the monotonic dimension-growing distillation payoff (`1.10×` → `4.76×`).
+

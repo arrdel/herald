@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "herald"
 version = "0.0.1"
-description = "Embedding-space speculative sampling for continuous-token generative models"
+description = "The dimensionality barrier and distillation cure in continuous speculative sampling"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26,<2.0",

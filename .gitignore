@@ -35,7 +35,7 @@ dist/
 .env
 .venv/
 
-# Paper, course deliverables and talks: kept locally and in Overleaf, not in the code repo
+# Paper, course deliverables and talks stay local / Overleaf — never push these
 /submission/
 /ProjectTemplate/
 /slides/

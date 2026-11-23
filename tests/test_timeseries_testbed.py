@@ -14,6 +14,7 @@ from herald.data import (
     Standardizer,
     build_bundle,
     chronological_split,
+    expanding_cv_bundles,
     synthetic_ar,
 )
 from herald.metrics import NFELedger
@@ -76,6 +77,23 @@ def test_standardizer_inverse_round_trips():
     x = np.random.default_rng(0).normal(3.0, 7.0, (100, 4)).astype(np.float32)
     scaler = Standardizer.fit(x)
     np.testing.assert_allclose(scaler.inverse(scaler.transform(x)), x, rtol=1e-4, atol=1e-4)
+
+
+def test_expanding_cv_bundles_disjoint_test_and_matches_last_fold():
+    series = np.arange(1000, dtype=np.float32).reshape(1000, 1)
+    folds = expanding_cv_bundles(series, window=10, stride=1, n_folds=3, val_frac=0.1, test_frac=0.2)
+    assert len(folds) == 3
+    ref = build_bundle(series, window=10, stride=1, fractions=(0.7, 0.1, 0.2))
+    assert len(folds[-1].train) == len(ref.train)
+    assert len(folds[-1].val) == len(ref.val)
+    assert len(folds[-1].test) == len(ref.test)
+    np.testing.assert_allclose(folds[-1].standardizer.mean, ref.standardizer.mean)
+    # Test blocks must be strictly ordered and non-overlapping in raw units.
+    test_ranges = []
+    for f in folds:
+        raw_vals = [f.standardizer.inverse(f.test[i]).numpy() for i in range(len(f.test))]
+        test_ranges.append((min(v.min() for v in raw_vals), max(v.max() for v in raw_vals)))
+    assert test_ranges[0][1] < test_ranges[1][0] and test_ranges[1][1] < test_ranges[2][0]
 
 
 def test_sliding_windows_are_channel_first_and_contiguous_in_time():
